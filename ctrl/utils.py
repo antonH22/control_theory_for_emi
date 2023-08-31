@@ -57,16 +57,15 @@ class PrincipalComponents:
         axes[1].set_xticklabels(range(1, n_dims+1))
         axes[1].set_xlabel('# components')
 
-def stable_ridge_regression(X, Inp, Y=None):
+def stable_ridge_regression(X, Inp, target=None):
     ''' Performs ridge regression for model X[1:] = A@X[:-1] + B@Inp[:-1]. 
         Regularization lambda is chosen as small as possible such that A is stable.
         Returns A, B, lambda. '''
-    if Y is None:
+    if target is None:
         combined_predictor = np.hstack((X, Inp))[:-1]
         target = X[1:]
     else:
         combined_predictor = np.hstack((X, Inp))
-        target = Y
     size = combined_predictor.shape[1]
     for lmbda in np.arange(0,10.5,0.01):
         moment_matrix = combined_predictor.T @ combined_predictor + lmbda * np.eye(size)
@@ -128,22 +127,100 @@ def finite_differences(data, timestamps, derivative_order=1, grid=[-1,0,1]):
         deriv[j] = data[t+grid].T @ coeff
     return deriv, timesteps
 
-def load_data():
-    data_dir = 'D:/ZI Mannheim/Control Theory/data_EMIcompass/range_-3_to_3'
+
+def load_data(ema_range=3, language='english'):
+    if ema_range==6:
+        data_dir = 'D:/ZI Mannheim/Control Theory/data_EMIcompass/range_0_to_6'
+    elif ema_range==3:
+        data_dir = 'D:/ZI Mannheim/Control Theory/data_EMIcompass/range_-3_to_3'
+    elif ema_range==-3:
+        data_dir = 'D:/ZI Mannheim/Control Theory/data_EMIcompass/range_-3_to_3_wrong'
+    else:
+        raise ValueError('range must be 3 or 6')
     data = []
     for data_path in os.listdir(data_dir):
         if data_path.endswith('.mat'):
             dataset = loadmat(os.path.join(data_dir, data_path))
-            labels = np.array(['anxious', 'cheerful*', 'down', 'irritated', 'relaxed*',
-                               'uncomfortable', 'calm*', 'energetic*', 'hungry', 'choose alone*',
-                               'rather company', 'soc. unpleasant', 'soc. apprec.*',
-                               'agreeable*', 'act. unpleasant'])
+            if language=='english':
+                labels = np.array(['anxious', 'cheerful*', 'down', 'irritated', 'relaxed*',
+                                'uncomfortable', 'calm*', 'energetic*', 'hungry', 'choose alone*',
+                                'rather company', 'soc. unpleasant', 'soc. apprec.*',
+                                'agreeable*', 'act. unpleasant'])
+            elif language=='german':
+                labels = np.array(['ängstlich', 'gut gelaunt*', 'traurig', 'irritiert', 'entspannt*',
+                                'unbehaglich', 'ruhig*', 'energetisch*', 'hungrig', 'lieber allein*',
+                                'lieber in Gesellschaft', 'unangenehme Gesellschaft', 'Wertschätzung*',
+                                'angenehm*', 'unangenehme Aktivität'])
+            
             dataset['Xlabs'] = labels
             dataset['Ilabs'] = ['EMI-I', 'EMI-II', 'EMI-III', 'with company']
             dataset['Igroups'] = np.array([3,3,3,3,3,3,2,2,2,1,1,1,1,0,0])
             dataset['Filename'] = data_path
+            dataset['B'] = dataset.pop('C')
             data.append(dataset)
     return data
+
+
+def generate_random_dataset(N: int, T: int, seed: int=None):
+    ''' Generate a dataset of trajectories drawn from a random model. 
+        The format of the dataset is compatible with the original EMIcompass datasets. '''
+    
+    dist = np.load('model_distribution.npy', allow_pickle=True).item()
+    A_shape = (dist['n_features'], dist['n_features'])
+    B_shape = (dist['n_features'], dist['n_control'])
+    A_dist = stats.multivariate_normal(dist['A_mean'], np.diag(dist['A_var']))
+    B_dist = stats.multivariate_normal(dist['B_mean'], np.diag(dist['B_var']))
+    data = []
+    for n in range(N):
+        A = A_dist.rvs(random_state=seed).reshape(A_shape)
+        maxeig = np.max(np.abs(np.linalg.eig(A)[0]))
+        B = B_dist.rvs(random_state=seed).reshape(B_shape)
+        if maxeig >= 1:
+            A /= maxeig + 0.001
+            B /= maxeig + 0.001
+        control_idx = np.random.default_rng(seed).integers(0, dist['n_control'], T//2)
+        control_vec = np.zeros((T, dist['n_control']))
+        control_vec[np.arange(T//2)*2, control_idx] = 1
+        traj = np.zeros((T, dist['n_features']))
+        traj[0] = np.random.default_rng(seed).integers(-3, 4, dist['n_features'])
+        for t in range(1,T):
+            traj[t] = A @ traj[t-1] + B @ control_vec[t-1]
+        traj = np.clip(np.round(traj), -3, 3)
+        A_est, B_est, _ = stable_ridge_regression(traj, control_vec)     
+        data.append({'X':traj, 'Inp':control_vec, 'Xnan':traj,
+                     'Xlabs':[f'feature_{i}' for i in range(dist['n_features'])],
+                     'Ilabs':[f'input_{i}' for i in range(dist['n_control'])],
+                     'Aoriginal': A, 'Boriginal': B,
+                     'A': A_est, 'B': B_est})
+        if seed is not None:
+            seed += 1
+
+    return data
+
+def generate_random_trajectory(T, seed=None):
+    ''' Draw a trajectory of a random model. Returns the data and input matrices X and U. '''
+
+    dist = np.load('model_distribution.npy', allow_pickle=True).item()
+    A_shape = (dist['n_features'], dist['n_features'])
+    B_shape = (dist['n_features'], dist['n_control'])
+    A_dist = stats.multivariate_normal(dist['A_mean'], np.diag(dist['A_var']))
+    B_dist = stats.multivariate_normal(dist['B_mean'], np.diag(dist['B_var']))
+    A = A_dist.rvs(random_state=seed).reshape(A_shape)
+    maxeig = np.max(np.abs(np.linalg.eig(A)[0]))
+    B = B_dist.rvs(random_state=seed).reshape(B_shape)
+    if maxeig >= 1:
+        A /= maxeig + 0.001
+        B /= maxeig + 0.001
+    control_idx = np.random.default_rng(seed).integers(0, dist['n_control'], T//2)
+    control_vec = np.zeros((T, dist['n_control']))
+    control_vec[np.arange(T//2)*2, control_idx] = 1
+    traj = np.zeros((T, dist['n_features']))
+    traj[0] = np.random.default_rng(seed).integers(-3, 4, dist['n_features'])
+    for t in range(1,T):
+        traj[t] = A @ traj[t-1] + B @ control_vec[t-1]
+    traj = np.clip(np.round(traj), -3, 3)
+
+    return traj, control_vec
 
 def bars(data: np.ndarray, *args, horizontal: bool=False, ax=None, **kwargs):
     ''' Plot bar chart. Axis 1 of data defines the x axis, while axis 0 defines individual
@@ -222,11 +299,9 @@ def colorplot_trajectory(trajectory, labels=None, title=None, ax=None, **kwargs)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.1)
     cbar = plt.colorbar(image, cax=cax)
-    # plt.colorbar(image, ax=ax)
     if title is not None:
         ax.set_title(title)
     ax.set_xlabel('time steps')
-    # ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
     T = trajectory.shape[0]
     ax.set_xticks(np.linspace(0, T-(T%3), 4))
     if labels is not None:
@@ -256,6 +331,8 @@ def plot_circular_graph(weights, directed=False, labels=None,
     ''' plots a graph with nodes arranged around circle, with edges that represent weights '''
     if ax is None:
         ax = plt.gca()
+    if labels is None:
+        labels = np.arange(weights.shape[0])
     scaled_weights = weights / weights.max()
     if directed:
         graph = nx.DiGraph()

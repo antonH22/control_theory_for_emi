@@ -84,7 +84,6 @@ class LQR(LinearSystem):
     
     @staticmethod
     def kalman_gain(A, B, Q, R):
-        ''' inifinite-time limit of kalman gain matrix '''
         riccati = solve_discrete_are(A, B, Q, R)
         temp = B.T @ riccati
         kalman = np.linalg.inv(temp @ B + R) @ temp @ A
@@ -123,8 +122,6 @@ class LQR(LinearSystem):
     def feedback_feedforward_sequence(A, B, C, Q, R, Yref, S=None, store_kalman=False, store_riccati=False,
                            store_feedforward=False, store_adjoint=True):
         ''' 
-            calculate solution to the riccati sequence, the correspoding time varying kalman gain matrix,
-            the feedforward gains, and the adjoint states.
             time range of input:
             Yref: 1 ... T
             time range of outputs (if stored): 
@@ -132,7 +129,8 @@ class LQR(LinearSystem):
             riccati: 1 ... T
             feedforward: 0 ... T-1
             adjoint: 1 ... T
-        '''        
+        '''
+        
         if S is None:
             S = Q
         T = Yref.shape[0]
@@ -178,23 +176,23 @@ class LQR(LinearSystem):
         return inv_transp_ABG @ adjoint - inv_transp_ABG @ C.T @ Q @ yref
 
     @staticmethod
-    def feedback_feedforward_gain(A, B, C, Q, R):
+    def feedback_feedforward_gain( A, B, C, Q, R):
         riccati = solve_discrete_are(A, B, C.T @ Q @ C, R)
         feedforward = inv(B.T @ riccati @ B + R) @ B.T
         kalman = feedforward @ riccati @ A
         return kalman, feedforward
     
-    # @classmethod
-    # def linear_quadratic_gaussian(cls, A, B, C, Q, R, 
-    #                               cov_process_noise=None, cov_obs_noise=None):
-    #     if not cov_process_noise:
-    #         cov_process_noise = np.zeros(A.shape[0])
-    #     if not cov_obs_noise:
-    #         cov_obs_noise = np.zeros(C.shape[0])
-    #     k_gain = cls.kalman_gain(A, B, Q, R)
-    #     k_filter = cls.kalman_gain(A.T, C.T, cov_process_noise, cov_obs_noise).T
+    @classmethod
+    def linear_quadratic_gaussian(cls, A, B, C, Q, R, 
+                                  cov_process_noise=None, cov_obs_noise=None):
+        if not cov_process_noise:
+            cov_process_noise = np.zeros(A.shape[0])
+        if not cov_obs_noise:
+            cov_obs_noise = np.zeros(C.shape[0])
+        k_gain = cls.kalman_gain(A, B, Q, R)
+        k_filter = cls.kalman_gain(A.T, C.T, cov_process_noise, cov_obs_noise).T
         
-    #     return k_gain, k_filter
+        return k_gain, k_filter
         
     @classmethod
     def closed_loop_optimal_control(cls, A, B, Q, R, X, S=None):
@@ -207,7 +205,7 @@ class LQR(LinearSystem):
     
     @classmethod
     def time_variant_closed_loop_optimal_control(cls, A, B, Q, R, X, S=None):
-        ''' calculate U=-GX where G is time varying Kalman gain matrix, and X is given '''
+        ''' calculate U=-GX where G is Kalman gain matrix, and X is given '''
         T = X.shape[0] - 1
         kalman, _ = cls.kalman_riccati_sequence(A, B, Q, R, T, S)
         U_kalman = -np.einsum('txy,ty->tx', kalman, X)
@@ -215,8 +213,7 @@ class LQR(LinearSystem):
     
     @classmethod
     def free_final_state_optimal_control(cls, A, B, Q, R, x0, T, S=None, constant_gain=True):
-        ''' calculate U=-GX where G is Kalman gain matrix, and X evolves according to Ax+Bu
-            Also returns the estimated trajectory X. '''
+        ''' calculate U=-GX where G is Kalman gain matrix, and X evolves according to Ax+Bu'''
         if constant_gain:
             kalman = cls.kalman_gain(A, B, Q, R)[np.newaxis, :].repeat(T, axis=0)            
         else:
@@ -233,9 +230,7 @@ class LQR(LinearSystem):
     @classmethod
     def tracking_optimal_control(cls, A, B, C, Q, R, X, Yref, S=None, save_memory=False):
         '''
-        Calculate U = -GX + FY, where G is a Kalman gain matrix, F the feedforward gain,
-        and Y the feedforward state.
-        X and Yref are assumed to be of time range 0 ... T-1 and 1 ... T resp.
+            X and Yref are assumed to be of time range 0 ... T-1 and 1 ... T resp.
         '''
         kalman, feedforward = cls.feedback_feedforward_gain(A, B, C, Q, R)
         if save_memory:
@@ -256,10 +251,6 @@ class LQR(LinearSystem):
 
     @classmethod
     def free_final_state_tracker(cls, A, B, C, Q, R, x0, Yref, S=None, save_memory=False):
-        '''
-        Calculate U = -GX + FY, where G is a Kalman gain matrix, F the feedforward gain,
-        and Y the feedforward state; X evolves according to AX + BU. Also returns X.
-        '''
         T = Yref.shape[0]
         kalman, feedforward = cls.feedback_feedforward_gain(A, B, C, Q, R)
         X = np.zeros((T+1, *x0.shape))
@@ -282,9 +273,7 @@ class LQR(LinearSystem):
     
     @classmethod
     def fixed_final_state_optimal_control(cls, A, B, R, x0, xT, T):
-        '''
-        Calculates the open loop optimal control, also returns the intermediate trajectory X.
-        '''
+        
         def weighted_ctrb_gramian(T):
             R_inv = np.linalg.inv(R)
             middle = B @ R_inv @ B.T
@@ -330,3 +319,22 @@ class LQR(LinearSystem):
             return steps.sum()
 
 
+
+if __name__=='__main__22':
+    
+    data_dir = '/home/janik/Storage/ZI Mannheim/Control Theory/data_EMIcompass/range_-3_to_3'
+    data_path = os.path.join(data_dir, os.listdir(data_dir)[1])
+    data = loadmat(data_path)
+    
+    X = data['X']
+    A = data['A']
+    B = data['C']
+    C = np.eye(5, A.shape[0])
+    Q = np.eye(A.shape[0])
+    Qobs = np.eye(C.shape[0])
+    R = np.eye(B.shape[1])
+    T = X.shape[0]
+    Yref = np.ones((T, C.shape[0])) * (-3)    
+    
+    kalman, _, feedforward, adjoint = LQR.feedback_feedforward_sequence(A, B, C, Qobs, R, Yref)
+    kalmanC, feedforwardC = LQR.feedback_feedforward_gain(A, B, C, Qobs, R)
