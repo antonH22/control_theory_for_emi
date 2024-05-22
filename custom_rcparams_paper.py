@@ -1,5 +1,5 @@
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.pyplot as plt
 import numpy as np
 
 F = 1
@@ -19,7 +19,7 @@ params['axes.edgecolor'] = 'black'
 # Grid
 params['axes.grid'] = False
 params['axes.grid.axis'] = 'y'
-params['grid.color'] = 'grey'
+params['grid.color'] = 'black'
 params['grid.linewidth'] = 0.15*F       #points
 # Lines
 params['lines.linewidth'] = 1*F         #points
@@ -73,7 +73,7 @@ params['legend.fancybox'] = False
 params['figure.figsize'] = (1.7*F, 1.1*F)   #inches
 params['savefig.bbox'] = 'standard'
 params['savefig.pad_inches'] = 0            #inches
-params['savefig.dpi'] = 200
+params['savefig.dpi'] = 300
 params['savefig.transparent'] = False
 params['svg.fonttype'] = 'path'
 # Imshow
@@ -83,29 +83,36 @@ params['image.origin'] = 'lower'
 mpl.style.use(params)
 
 class colors:
-    # valence = np.array([ 27,120, 55]) / 255
-    # social = np.array([ 90,174, 97]) / 255
-    # somatic = np.array([153,112,171]) / 255
-    # mood = np.array([118, 42,131]) / 255
+    
+    standard = 'slategrey'
+    lightgrey = 'gainsboro'
+    white = 'white'
 
     valence = 'slategrey'
     social = 'slategrey'
     somatic = 'slategrey'
     mood = 'slategrey'
 
+    opt_ctrl = '#1b9e77'
+    brute_force = '#d95f02'
+    max_ac = '#7570b3'
+    algorithms = [opt_ctrl, brute_force, max_ac]
+    algorithms_dict = {'optimal ctrl': opt_ctrl, 'brute force': brute_force, 'max AC': max_ac}
+
+    energy = '#d7191c'
+    cir = '#9ecca6'
     ac = '#01153E'
     mc = '#029386'
-    energy = '#8C000F'
-
-    standard = 'slategrey'
-    lightgrey = 'whitesmoke'
-    white = 'white'
 
     errorbars = 'black'
+    light_errorbars = 'slategrey'
 
-    binary_cmap = mpl.colors.ListedColormap([white, standard])
+    binary_cmap = mpl.colors.ListedColormap([white, 'slategrey'])
+
+    likert_cmap = mpl.colors.ListedColormap(plt.cm.coolwarm(np.linspace(0,1,7)))
 
     features = list(reversed([valence, valence, social, 
                               social, social, social, 
                               somatic, somatic, somatic,
                               mood, mood, mood, mood, mood, mood]))
+    

@@ -1,132 +1,17 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Dec  7 14:32:57 2022
+import itertools as it
+import os
+import warnings
+from typing import List, Optional
 
-@author: janik
-"""
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy as np
+from mpl_toolkits.axes_grid1 import Divider, Size, make_axes_locatable
 from scipy import stats
 from scipy.io import loadmat
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-import networkx as nx
-import itertools as it
-import warnings
-import os
 
-class PrincipalComponents:
-    ''' Performs PCA and can project vectors into Principal Component Space '''
-    
-    def __init__(self, X):
-        self.data_mean = X.mean(axis=0)
-        self.data_std = X.std(axis=0)
-        X = (X - self.data_mean) / self.data_std
-        cov = np.cov(X.T)
-        eigvals, eigvecs = np.linalg.eig(cov)
-        order = np.argsort(eigvals)[::-1]
-        self.princomps = eigvecs[:, order]
-        self.explained_var = eigvals[order]        
-        
-    def project(self, data, n_dims=None):
-        ''' Projects data into principal component space up to n_dims dimensions '''
-        y = (data - self.data_mean) / self.data_std
-        projected = y @ self.princomps[:, :n_dims]
-        return projected
-    
-    def plot(self, feature_names, n_dims=None):
-        ''' Plots a summary of the PCA results '''
-        fig, axes = plt.subplots(1,2)        
-        n_features = self.princomps.shape[0]
-        if not n_dims:
-            n_dims = n_features
-        im = axes[0].matshow(self.princomps, cmap='RdYlGn')
-        axes[0].set_xticks(range(n_dims))
-        axes[0].set_xticklabels(range(n_dims), rotation=45)
-        axes[0].set_xlabel('components')
-        axes[0].set_yticks(range(n_dims))
-        axes[0].set_yticklabels(feature_names)
-        axes[0].set_title('Factor loadings')
-        plt.colorbar(im, ax=axes[0])
-        axes[1].plot(self.explained_var / self.explained_var.sum())
-        # axes[1].plot(self.explained_var.cumsum() / self.explained_var.sum())
-        # axes[1].legend(['incremental', 'cumulative'])
-        axes[1].set_title('Explained % variance')
-        axes[1].set_xticks(range(n_dims))
-        axes[1].set_xticklabels(range(1, n_dims+1))
-        axes[1].set_xlabel('# components')
-
-def stable_ridge_regression(X, Inp, target=None):
-    ''' Performs ridge regression for model X[1:] = A@X[:-1] + B@Inp[:-1]. 
-        Regularization lambda is chosen as small as possible such that A is stable.
-        Returns A, B, lambda. '''
-    if target is None:
-        combined_predictor = np.hstack((X, Inp))[:-1]
-        target = X[1:]
-    else:
-        combined_predictor = np.hstack((X, Inp))
-    size = combined_predictor.shape[1]
-    for lmbda in np.arange(0,10.5,0.01):
-        moment_matrix = combined_predictor.T @ combined_predictor + lmbda * np.eye(size)
-        regression_weights = np.linalg.pinv(moment_matrix) @ combined_predictor.T @ target
-        A = regression_weights[:X.shape[1]]
-        B = regression_weights[X.shape[1]:]
-        if np.abs(np.linalg.eig(A)[0]).max() < 1:
-            break
-
-    return A.T, B.T, lmbda
-
-def trace(M):
-    return np.diag(M).sum()
-
-def partial_corr(M):
-    '''
-    Calculates all partial correlations between rows of M,
-    partialing out all other rows of M
-    '''
-    cov = np.cov(M)
-    prec = np.linalg.inv(cov)
-    pcorr = np.zeros_like(prec)
-    for i, j in it.product(range(pcorr.shape[0]), range(pcorr.shape[1])):
-        pcorr[i,j] = - prec[i,j] / np.sqrt(prec[i,i]*prec[j,j])
-    return pcorr
-
-def pearson_ci(data, ci=95):
-    ''' Calculates pearson correlation coefficient of data (across axis 0) and
-        confidence interval of correlation coefficient. '''
-    if not isinstance(data, np.ndarray):
-        data = np.array(data)
-    N = data.shape[1]
-    probit = stats.norm.ppf((ci/100+1)/2)
-    correl = np.corrcoef(data)
-    fisher = np.arctanh(correl)
-    lower_bound = np.tanh(fisher - probit/np.sqrt(N-3))
-    upper_bound = np.tanh(fisher + probit/np.sqrt(N-3))
-    return correl, lower_bound, upper_bound
-
-def zscore(M, axis=None):
-    result = (M - M.mean(axis=axis, keepdims=True)) / M.std(axis=axis, keepdims=True)
-    return result
-
-def interpolate(M, steps=100):
-    '''  Linear interpolation at evenly spaced grid along rows of M '''
-    rel_coord = np.linspace(0, steps-1, len(M))
-    return np.interp(range(steps), rel_coord, M)
-
-def finite_differences(data, timestamps, derivative_order=1, grid=[-1,0,1]):
-    ''' Calculate finite difference approximation of the derivative of data 
-        where <timestamps> defines the times when rows of data have been recorded. '''
-    grid = np.array(grid)
-    T = data.shape[0]
-    timesteps = np.arange(-np.min(np.min(grid),0), T-np.max(np.max(grid),0))
-    deriv = np.zeros((len(timesteps), data.shape[1]))
-    for j,t in enumerate(timesteps):
-        grid_matrix = np.vstack([(timestamps[grid+t] - timestamps[t])**d for d in range(len(grid))])
-        coeff = np.linalg.inv(grid_matrix)[:,derivative_order] * np.math.factorial(derivative_order)
-        deriv[j] = data[t+grid].T @ coeff
-    return deriv, timesteps
-
+### Data utils
 
 def load_data(ema_range=3, language='english'):
     if ema_range==6:
@@ -140,7 +25,9 @@ def load_data(ema_range=3, language='english'):
     data = []
     for data_path in os.listdir(data_dir):
         if data_path.endswith('.mat'):
-            dataset = loadmat(os.path.join(data_dir, data_path))
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                dataset = loadmat(os.path.join(data_dir, data_path))
             if language=='english':
                 labels = np.array(['anxious', 'cheerful*', 'down', 'irritated', 'relaxed*',
                                 'uncomfortable', 'calm*', 'energetic*', 'hungry', 'choose alone*',
@@ -159,6 +46,25 @@ def load_data(ema_range=3, language='english'):
             dataset['B'] = dataset.pop('C')
             data.append(dataset)
     return data
+
+
+def generate_dataset(data: np.ndarray, inputs: np.ndarray, 
+                     data_labels: Optional[List]=None, input_labels: Optional[List]=None):
+    assert data.shape[0] == inputs.shape[0]
+    if data_labels is not None:
+        assert len(data_labels) == data.shape[1]
+    else:
+        data_labels = [f'item_{k}' for k in range(data.shape[1])]
+    if input_labels is not None:
+        assert len(input_labels) == inputs.shape[1]
+    else:
+        input_labels = [f'input_{k}' for k in range(inputs.shape[1])]
+    dataset = dict(('X', data),
+                   ('Inp', inputs),
+                   ('Xlabs', data_labels),
+                   ('Ilabs', input_labels)
+                   )
+    return dataset
 
 
 def generate_random_dataset(N: int, T: int, seed: int=None):
@@ -197,107 +103,69 @@ def generate_random_dataset(N: int, T: int, seed: int=None):
 
     return data
 
-def generate_random_trajectory(T, seed=None):
-    ''' Draw a trajectory of a random model. Returns the data and input matrices X and U. '''
 
-    dist = np.load('model_distribution.npy', allow_pickle=True).item()
-    A_shape = (dist['n_features'], dist['n_features'])
-    B_shape = (dist['n_features'], dist['n_control'])
-    A_dist = stats.multivariate_normal(dist['A_mean'], np.diag(dist['A_var']))
-    B_dist = stats.multivariate_normal(dist['B_mean'], np.diag(dist['B_var']))
-    A = A_dist.rvs(random_state=seed).reshape(A_shape)
-    maxeig = np.max(np.abs(np.linalg.eig(A)[0]))
-    B = B_dist.rvs(random_state=seed).reshape(B_shape)
-    if maxeig >= 1:
-        A /= maxeig + 0.001
-        B /= maxeig + 0.001
-    control_idx = np.random.default_rng(seed).integers(0, dist['n_control'], T//2)
-    control_vec = np.zeros((T, dist['n_control']))
-    control_vec[np.arange(T//2)*2, control_idx] = 1
-    traj = np.zeros((T, dist['n_features']))
-    traj[0] = np.random.default_rng(seed).integers(-3, 4, dist['n_features'])
-    for t in range(1,T):
-        traj[t] = A @ traj[t-1] + B @ control_vec[t-1]
-    traj = np.clip(np.round(traj), -3, 3)
+### Algebra utils
 
-    return traj, control_vec
-
-def bars(data: np.ndarray, *args, horizontal: bool=False, ax=None, **kwargs):
-    ''' Plot bar chart. Axis 1 of data defines the x axis, while axis 0 defines individual
-    neighbouring bars. Args and kwargs are passed to pyplot.bar.'''
-    if ax is None:
-        fig, ax = plt.subplots()
-    if isinstance(data, tuple) or isinstance(data, list):
-        data = np.array(data)
-    N = data.shape[0]
-    if data.ndim==1:
-        data = data[:, np.newaxis]
-    if 'width' in kwargs.keys():
-        total_width = kwargs['width']
-        kwargs.pop('width')
+def stable_ridge_regression(data, inputs, intercept=False, accepted_eigval_threshold=1, max_regularization=10.5):
+    ''' Performs ridge regression for model X[1:] = A@X[:-1] + B@Inp[:-1]. 
+        Regularization lambda is chosen as small as possible such that A is stable.
+        Returns A, B, lambda. If intercept, returns A, B, intercept, lambda. '''
+    if inputs is None:
+        inputs = np.zeros((data.shape[0], 0))
+    combined_predictor = np.hstack((data, inputs))[:-1]
+    target = data[1:]
+    if intercept:
+        combined_predictor = np.hstack((combined_predictor, np.ones((combined_predictor.shape[0], 1))))
+    size = combined_predictor.shape[1]
+    for lmbda in np.arange(0,max_regularization,0.001):
+        moment_matrix = combined_predictor.T @ combined_predictor + lmbda * np.eye(size)
+        regression_weights = np.linalg.pinv(moment_matrix) @ combined_predictor.T @ target
+        A = regression_weights[:data.shape[1]]
+        B = regression_weights[data.shape[1]:]
+        if np.abs(np.linalg.eig(A)[0]).max() < accepted_eigval_threshold:
+            break
+    if intercept:
+        c = B[-1]
+        B = B[:-1]
+        return A.T, B.T, lmbda, c
     else:
-        total_width = 0.8
-    if 'yerr' in kwargs.keys():
-        yerr = kwargs['yerr']
+        return A.T, B.T, lmbda
+    
+def cohens_d(x: np.array, y: np.array, paired=False, correct=False):
+    axis=None
+    nx = (~np.isnan(x)).sum()
+    ny = (~np.isnan(y)).sum()
+    if paired:
+        d = np.nanmean(x - y, axis) / np.nanstd(x - y, ddof=1)
     else:
-        yerr = None
-    if 'color' in kwargs.keys():   
-        color = kwargs['color']
-    else:
-        color = None   
-    
-    individual_width = total_width/N
-    barsize = individual_width
-    offsets = -0.5*total_width + 0.5*individual_width + np.linspace(0, (N-1)*individual_width, N)
-    
-    for j in range(N):
-        if yerr is not None:
-            kwargs['yerr'] = yerr[j]
-        if color is not None:
-            kwargs['color'] = color[j]
-        x = np.arange(len(data[j])) + offsets[j]
-        if horizontal:
-            ax.barh(x, data[j], barsize, *args, **kwargs)
-        else:
-            ax.bar(x, data[j], barsize, *args, **kwargs)
-    
-    return ax
+        dof = nx + ny - 2
+        d = ((np.nanmean(x, axis) - np.nanmean(y, axis)) / 
+            np.sqrt(((nx-1)*np.nanstd(x, ddof=1) ** 2 + (ny-1)*np.nanstd(y, ddof=1) ** 2) / dof))
+        if correct:
+            d *= (1 - 3 / (4*(nx + ny) - 9))
+    return d
 
-def plot_trajectory_plane(*trajectories, legend=None, title=None, ax=None):
-    ''' plots first 2 dimensions of trajectories into a plane (without time axis)'''
-    colors = ['blue','orange','green','red','purple','cyan']
-    if ax is None:
-        fig, ax = plt.subplots()
-    line_handlers = []
-    for j, traj in enumerate(trajectories):
-        hdlr, = ax.plot(traj[:,0], traj[:,1], color=colors[j])
-        ax.plot(*traj[0], marker='s', fillstyle='none', color=colors[j])
-        ax.plot(*traj[-1], marker='o', color=colors[j])
-        line_handlers.append(hdlr)
-    if title is not None:
-        ax.set_title(title)
-    if legend is not None:
-        ax.legend(line_handlers, legend)
-        
-def plot_trajectories(*trajectories, legend=None, title=None, ax=None):
-    ''' plots trajectories into same plots (x axis is time) '''
-    if ax is None:
-        fig, ax = plt.subplots()
-    for j, traj in enumerate(trajectories):
-        ax.plot(traj)
-    if title is not None:
-        ax.set_title(title)
-    ax.set_xlabel('time')
-    if legend is not None:
-        ax.legend(legend)
-        
-def colorplot_trajectory(trajectory, labels=None, title=None, ax=None, **kwargs):
+def trace(M):
+    return np.diag(M).sum()
+
+
+def round_to_vector(M, Z, p_norm=2):
+    ''' Rounds the rows of M to the nearest row of round_to, according to ||M-round_to||^p-norm '''
+    distance = np.sum(np.abs(M[np.newaxis] - Z[:, np.newaxis])**p_norm, axis=-1)**(1/p_norm)
+    argmin_distance = np.argmin(distance, axis=0)
+    return Z[argmin_distance]
+
+
+
+### Plotting utils
+       
+def colorplot_trajectory(trajectory, labels=None, title=None, ax=None, cax_settings={}, **kwargs):
     ''' plots trajectory as heatmap (x axis is time, y axis is trajectory dimensions) '''
     if ax is None:
         fig, ax = plt.subplots()
     image = ax.imshow(trajectory.T, **kwargs)
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.1)
+    cax = steal_space_from_axis(ax, **cax_settings)
+
     cbar = plt.colorbar(image, cax=cax)
     if title is not None:
         ax.set_title(title)
@@ -309,21 +177,8 @@ def colorplot_trajectory(trajectory, labels=None, title=None, ax=None, **kwargs)
         ax.set_yticklabels(labels)
         ax.tick_params(left=False)
 
-    return ax, cbar
-        
-def plot_correlation(X, labels, title=None, ax=None):
-    ''' plots heatmap of correlation coefficients '''
-    if ax is None:
-        fig, ax = plt.subplots()
-    M = np.corrcoef(X.T)
-    image = ax.matshow(M)
-    plt.colorbar(image, ax=ax)
-    ax.set_xticks(range(M.shape[0]))
-    ax.set_xticklabels(labels, rotation=45)
-    ax.set_yticks(range(M.shape[1]))
-    ax.set_yticklabels(labels)
-    if title is not None:
-        ax.set_title(title)
+    return ax, cax
+
 
 def plot_circular_graph(weights, directed=False, labels=None, 
                         max_edge_width=3, max_edge_rad=0.9,
@@ -388,45 +243,7 @@ def plot_circular_graph(weights, directed=False, labels=None,
         # ax.autoscale_view()    
 
     return ax
-    
 
-def plot_prediction_against_data(X, U, system, dims, pca=False, axes=None):
-    ''' One subplot per dimension of X. dims specifies (number of) dimensios to plot. 
-        Predictions ar calculated according to system. If pca, X and predictions
-        are projected into principal component space of X. '''
-    if isinstance(dims, int):
-        dims = np.arange(dims)
-    elif isinstance(dims, list):
-        dims = np.array(dims)
-    if axes is None:
-        fig, axes = plt.subplots(len(dims), 1, sharex=True, sharey=True)
-    prediction = system.evolve(X.shape[0], X[0], U)
-    if pca:
-        pca = PrincipalComponents(X)
-        X = pca.project(X)
-        prediction = pca.project(prediction)
-    for i, d in enumerate(dims):
-        axes[i].plot(X[:,d])
-        axes[i].plot(prediction[:,d])
-        plt.legend(['true', 'model'])
-
-
-def plot_regression(x, y, ax=None, scatter_kwargs={}, line_kwargs={}, 
-                    nan_policy='propagate', test_alternative='two-sided'):
-    ''' Scatter plots x against y and fits affine-linear curve. 
-        Returns axis and stats.PearsonResult '''
-    if nan_policy=='omit':
-        mask = (~np.isnan(x)) * (~np.isnan(y))
-        x = x[mask]
-        y = y[mask]
-    a, b = np.polyfit(x, y, deg=1)
-    if ax is None:
-        fig, ax = plt.subplots()
-    ax.scatter(x, y, **scatter_kwargs)
-    span = np.array(ax.get_xlim())
-    ax.plot(span, span*a + b, **line_kwargs)
-    corr = stats.pearsonr(x, y, alternative=test_alternative)
-    return ax, corr
 
 def get_axis_size(ax: mpl.axes.Axes):
     sp = ax.figure.subplotpars
@@ -435,8 +252,43 @@ def get_axis_size(ax: mpl.axes.Axes):
     ax_height = fig_height * (sp.top - sp.bottom)
     return ax_width, ax_height
 
-def set_axis_size(ax: mpl.axes.Axes, width: float, height: float):
-    sp = ax.figure.subplotpars
-    fig_width = float(width) / (sp.right - sp.left)
-    fig_height = float(height) / (sp.top - sp.bottom)
-    ax.figure.set_size_inches(fig_width, fig_height)
+
+def set_axis_size(ax: mpl.axes.Axes, width: float|None=None, height: float|None=None):
+    # orig_width, orig_height = ax.get_figure().get_size_inches()
+    # sp = ax.figure.subplotpars
+    # if width is None:
+    #     fig_width = orig_width
+    # else:
+    #     fig_width = float(width) / (sp.right - sp.left)
+    # if height is None:
+    #     fig_height = orig_height
+    # else:
+    #     fig_height = float(height) / (sp.top - sp.bottom)
+    # ax.figure.set_size_inches(fig_width, fig_height)
+
+    horizontal = [Size.Fixed(0), Size.Fixed(width)]
+    vertical = [Size.Fixed(0), Size.Fixed(height)]
+    divider = Divider(ax.get_figure(), (0, 0, 1, 1), horizontal, vertical, aspect=False)
+    ax.set_axes_locator(divider.new_locator(1,1))
+
+
+def steal_space_from_axis(ax, side='right', size="5%", pad=0.1):
+    divider = make_axes_locatable(ax)
+    new_axis = divider.append_axes(side, size=size, pad=pad)
+    return new_axis    
+
+
+def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float=1.):
+    fig = plt.figure(figsize=(width_inches+4*pad_inches, height_inches+4*pad_inches))
+
+    # The first items are for padding and the second items are for the axes.
+    # sizes are in inch.
+    h = [Size.Fixed(pad_inches), Size.Fixed(height_inches)]
+    v = [Size.Fixed(pad_inches), Size.Fixed(width_inches)]
+
+    divider = Divider(fig, (0, 0, 1, 1), h, v, aspect=False)
+    # The width and height of the rectangle are ignored.
+
+    ax = fig.add_axes(divider.get_position(),
+                    axes_locator=divider.new_locator(nx=1, ny=1))
+    return fig, ax
