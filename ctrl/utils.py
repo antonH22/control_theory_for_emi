@@ -11,6 +11,7 @@ from mpl_toolkits.axes_grid1 import Divider, Size, make_axes_locatable
 from scipy import stats
 from scipy.io import loadmat
 
+import pandas as pd
 ### Data utils
 
 def load_data(ema_range=3, language='english'):
@@ -292,3 +293,54 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
     ax = fig.add_axes(divider.get_position(),
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
+
+def csv_to_dataset(file_path, state_columns, input_columns, invert_columns):
+    ''' Load a CSV file, adjust data and convert it to a datset (dictionary). '''
+    # Step 1: Load CSV as DataFrame
+    csv_df = pd.read_csv(file_path)
+
+    # Step 2: Select only the required columns
+    required_columns = state_columns + input_columns
+    csv_df = csv_df[required_columns]
+    
+    # Step 3: Handle missing values 
+    # (a) replace with column mean
+    for column in csv_df.columns:
+        if csv_df[column].isnull().any():
+            column_mean = csv_df[column].mean()
+            csv_df[column] = csv_df[column].fillna(column_mean)
+    # (b) delete rows with missing values
+    #csv_df.dropna(inplace=True)
+    
+    # Step 4: Split into state and input variables
+    X = csv_df[state_columns].values
+    Inp = csv_df[input_columns].values
+
+    # Step 5: Regularize state variables to [-3, 3]
+    X -= 4
+    
+    # Invert columns if necessary
+    for column in invert_columns:
+        idx = state_columns.index(column)
+        X[:, idx] = -X[:, idx]
+    
+    # Step 6: Convert to dictionary
+    return {'X': X, 'Inp': Inp}
+
+
+def dataset_to_csv(dataset, state_columns, input_columns, output_file):
+    '''' Convert a dataset (dictionary) back to a CSV file. '''
+    # Extract the state and input arrays from the dataset
+    X = dataset['X']
+    Inp = dataset['Inp']
+    
+    # Concatenate the state and input arrays horizontally
+    data = np.hstack((X, Inp))
+    
+    columns = state_columns + input_columns
+    
+    # Create a DataFrame
+    df = pd.DataFrame(data, columns=columns)
+    
+    # Write the DataFrame to a CSV file
+    df.to_csv(output_file, index=False)
