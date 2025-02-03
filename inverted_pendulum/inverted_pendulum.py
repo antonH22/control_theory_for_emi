@@ -55,7 +55,7 @@ def simulate_system_step_linear(x, u, noise_std=0.0, A=A, B=B):
     return x_next + noise_vec
 
 #Nonlinear Dynamics Simulation to better capture the dynamics far from equilibrium
-def pendcart_derivatives(x, u, noise_std=0.0):
+def simulate_system_step_nonlinear(x, u, noise_std=0.0):
     m = 1  # mass of the pendulum
     M = 1  # mass of the cart
     L = 2  # length of the pendulum arm
@@ -101,7 +101,7 @@ def simulate_pendulum(x_0, x_ref, A, B, noise_std, num_steps):
         u = -K @ (x_t - reference.T)
         #u = np.array([0.0])
         # Update the state using the nonlinear or linear dynamics function
-        x_t = pendcart_derivatives(x_t, u)  # Get the next state
+        x_t = simulate_system_step_nonlinear(x_t, u)  # Get the next state
 
         # Append the updated state and control input
         states.append(x_t)
