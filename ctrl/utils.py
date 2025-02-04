@@ -117,6 +117,12 @@ def stable_ridge_regression(data, inputs, intercept=False, accepted_eigval_thres
     target = data[1:]
     if intercept:
         combined_predictor = np.hstack((combined_predictor, np.ones((combined_predictor.shape[0], 1))))
+        
+    # Remove rows in predictor with NaN values in predictor or target and the corresponding target rows (next time step)
+    nan_mask = ~np.isnan(combined_predictor).any(axis=1) & ~np.isnan(target).any(axis=1)
+    combined_predictor = combined_predictor[nan_mask]
+    target = target[nan_mask]
+
     size = combined_predictor.shape[1]
     for lmbda in np.arange(0,max_regularization,0.001):
         moment_matrix = combined_predictor.T @ combined_predictor + lmbda * np.eye(size)
