@@ -38,11 +38,12 @@ def simulate_system_step_nonlinear(x, u, delta_t, noise_std=0.0):
     dx[2] = x[3]  # theta_dot
     dx[3] = (1 / D) * ((M + m) * m * g * L * Sx - m * L * Cx * (m * L * x[3]**2 * Sx - d * x[1])) - m * L * Cx * (1 / D) * u
 
-    # Add noise to specific nodes
+    # Add noise to angle
     noise = np.random.normal(0, noise_std)
-    noise_vec = np.array([0, 0, noise, 0])
+    noise_angle = np.array([0, 0, noise, 0])
 
-    return x + dx * delta_t + noise_vec  # Euler method
+    x_next = x + dx * delta_t + noise_angle  # Euler method
+    return x_next
 
 # Function to generate a single trajectory
 def generate_trajectory(initial_state, input_func, delta_t, steps, noise_std=0.0):
@@ -102,7 +103,7 @@ def generate_dataset_pendulum_up(num_trajectories, delta_t, steps, noise_std=0.0
 
 # Parameters
 num_trajectories = 20
-noise_std = 0.0
+noise_std = 0.01
 
 # Generate the dataset
 dataset = generate_dataset_pendulum_down(num_trajectories, delta_t, steps, noise_std)
@@ -202,7 +203,7 @@ def simulate_pendulum(x_0, x_ref, A, B, noise_std, num_steps):
 x_0 = np.array([0, 0, 0.1, 0])  # Initial state (position, velocity, angle, angular velocity)
 x_ref = np.array([1, 0, 0, 0])  # Reference state
 
-states, inputs = simulate_pendulum(x_0, x_ref, A, B, 0.0, 2000)
+states, inputs = simulate_pendulum(x_0, x_ref, A, B, 0.01, 2000)
 
 # Bemerkung: Das nonlineare System kann basierend auf dem abgeleiteten linearen System (matrix A und B) kontrolliert werden (durch berechnung der K Matrix)
 # Das lineare System kann nur in der Nähe des Gleichgewichts Pendel unten simuliert und kontrolliert werden

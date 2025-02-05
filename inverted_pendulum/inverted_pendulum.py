@@ -47,12 +47,11 @@ for t in tau:
 
 # Linear Dynamics Simulation only works well near equilibrium (pendulum down) why?
 def simulate_system_step_linear(x, u, noise_std=0.0, A=A, B=B):
-    # Discrete-time update equation
-    x_next = doc.step(A, B, x, u)
-    # Add noise to specific nodes
     noise = np.random.normal(0, noise_std)
-    noise_vec = np.array([noise, noise, noise, noise])
-    return x_next + noise_vec
+    noise_angle = np.array([0, 0, noise, 0])
+    # Discrete-time update equation
+    x_next = doc.step(A, B, x, u) + noise_angle
+    return x_next
 
 #Nonlinear Dynamics Simulation to better capture the dynamics far from equilibrium
 def simulate_system_step_nonlinear(x, u, noise_std=0.0):
@@ -78,9 +77,9 @@ def simulate_system_step_nonlinear(x, u, noise_std=0.0):
 
     # Add noise to specific nodes
     noise = np.random.normal(0, noise_std)
-    noise_vec = np.array([0, 0, 0, 0])
+    noise_angle = np.array([0, 0, noise, 0])
 
-    x_next = x + dx * delta_t + noise_vec  # Assuming small time step (Euler method)
+    x_next = x + dx * delta_t + noise_angle  # Assuming small time step (Euler method)
     
     return x_next
 
@@ -101,7 +100,7 @@ def simulate_pendulum(x_0, x_ref, A, B, noise_std, num_steps):
         u = -K @ (x_t - reference.T)
         #u = np.array([0.0])
         # Update the state using the nonlinear or linear dynamics function
-        x_t = simulate_system_step_nonlinear(x_t, u)  # Get the next state
+        x_t = simulate_system_step_linear(x_t, u, noise_std)  # Get the next state
 
         # Append the updated state and control input
         states.append(x_t)
@@ -112,7 +111,7 @@ def simulate_pendulum(x_0, x_ref, A, B, noise_std, num_steps):
 x_0 = np.array([0, 0, 0.1, 0])  # Initial state (position, velocity, angle, angular velocity)
 x_ref = np.array([1, 0, 0, 0])  # Reference state
 
-states, inputs = simulate_pendulum(x_0, x_ref, A, B, 0.0, 2000)
+states, inputs = simulate_pendulum(x_0, x_ref, A, B, 0.01, 2000)
 
 # Bemerkung: Das nonlineare System kann basierend auf dem abgeleiteten linearen System (matrix A und B) kontrolliert werden (durch berechnung der K Matrix)
 # Das lineare System kann nur in der Nähe des Gleichgewichts Pendel unten simuliert und kontrolliert werden, obwohl die controllable funktion sagt, dass es kontrollierbar ist.
