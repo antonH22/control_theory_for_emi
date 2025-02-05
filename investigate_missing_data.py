@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import shapiro
+import os
+import glob
 
 emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed']
 
@@ -31,69 +33,78 @@ def compute_z_score_deterioration(deterioration):
     z_score = (deterioration - mean_deterioration) / std_deterioration
     return z_score
 
-# The datasets need to be preprocessed before using this code (select columns, invert columns)
-# Load the datasets
-df1 = pd.read_csv("Path")
-df2 = pd.read_csv("Path")
-df3 = pd.read_csv("Path")
+def compute_missing_data_percentage(df):
+    df = df[emas]
+    num_rows_with_missing_data = df.isna().any(axis=1).sum()  # Count rows with missing values
+    return num_rows_with_missing_data / len(df)
 
-column_means1 = compute_mean_without_nan(df1, emas)
-column_means2 = compute_mean_without_nan(df2, emas)
-column_means3 = compute_mean_without_nan(df3, emas)
+# Get all CSV files in the preprocessed data folder
+prep_data_folder = "prep_data"
+subfolders = ["MRT1","MRT2","MRT3"]
 
-column_means_nan1 = compute_mean_with_nan_infront(df1, emas)
-column_means_nan2 = compute_mean_with_nan_infront(df2, emas)
-column_means_nan3 = compute_mean_with_nan_infront(df3, emas)
+# Collect all CSV files with less than 50% missing rows from the specified subfolders
+csv_files = []
+for subfolder in subfolders:
+    folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
+    for file in glob.glob(folder_path):
+        df = pd.read_csv(file)
+        missing_data_percentage = compute_missing_data_percentage(df)
+        if missing_data_percentage < 0.8:
+            csv_files.append(file)
 
-deterioration1 = compute_deterioration_means(column_means1, column_means_nan1)
-deterioration2 = compute_deterioration_means(column_means2, column_means_nan2)
-deterioration3 = compute_deterioration_means(column_means3, column_means_nan3)
+# Initialize lists to store results
+column_means_list = []
+column_means_nan_list = []
+deterioration_list = []
+missing_data_list = []
 
-column_means = (column_means1 + column_means2 + column_means3) / 3.0
-column_means_nan = (column_means_nan1 + column_means_nan2 + column_means_nan3) / 3.0
-deteriorations = (deterioration1 + deterioration2 + deterioration3) / 3.0
+# Process each CSV file
+for csv_file in csv_files:
+    df = pd.read_csv(csv_file)
+    column_means = compute_mean_without_nan(df, emas)
+    column_means_nan = compute_mean_with_nan_infront(df, emas)
+    deterioration = compute_deterioration_means(column_means, column_means_nan)
+    missing_data = compute_missing_data_percentage(df)
+    
+    column_means_list.append(column_means)
+    column_means_nan_list.append(column_means_nan)
+    deterioration_list.append(deterioration)
+    missing_data_list.append(missing_data)
 
+# Compute the mean across all datasets
+column_means = sum(column_means_list) / len(column_means_list)
+column_means_nan = sum(column_means_nan_list) / len(column_means_nan_list)
+deteriorations = sum(deterioration_list) / len(deterioration_list)
+missing_data_mean = sum(missing_data_list) / len(missing_data_list)
+
+"""
 # Perform the Shapiro-Wilk Test for normality
 check_aprox_normal = np.array(deteriorations)
 statistic, p_value = shapiro(check_aprox_normal)
+print(f"Shapiro-Wilk Test Statistic: {statistic}")
+print(f"p-value: {p_value}")
+"""
 
-# Print the results
-#print(f"Shapiro-Wilk Test Statistic: {statistic}")
-#print(f"p-value: {p_value}")
-#The p-value (0.2288) is greater than 0.05-> the data is approximately normal
-
+# Compute z-scores for deterioration
 z_scores = compute_z_score_deterioration(deteriorations)
 
-#positive deterioration: worsend mental health before missing data
+# Concatenate results into a DataFrame
 concatenated = pd.concat([column_means, column_means_nan, deteriorations, z_scores], axis=1)
-concatenated.columns = ['means', 'means before missing data','deterioration','z_score']
+concatenated.columns = ['means', 'means before missing data', 'deterioration', 'z_score']
 print(concatenated)
 
-# Sum over all deteriorations (positive deterioration: worsend mental health before missing data)
+# Compute the mean deterioration over all datasets
 mean_deterioration = deteriorations.sum() / len(emas)
 print(f'Deterioration mean: {mean_deterioration}')
 
 # Findings:
 # Higher tiredness, stress are indicator for missing data
 # Indicates that the missing data is not random, but more data needs to be analyzed to confirm this
-# -> Informative missingness
-
-####################################################################################################################################
-# Missing data percentage
-def compute_missing_data_percentage(df):
-    df = df[emas]
-    rows_with_missing_data = df[df.isna().any(axis=1)].index
-    num_rows_with_missing_data = len(rows_with_missing_data)
-    return num_rows_with_missing_data / (len(df) -1)
-    
-missing_data1 = compute_missing_data_percentage(df1)
-missing_data2 = compute_missing_data_percentage(df2)
-missing_data3 = compute_missing_data_percentage(df3)
-
 print()
-print(f'Missing data percentage 1: {missing_data1}')
-print(f'Missing data percentage 2: {missing_data2}')
-print(f'Missing data percentage 3: {missing_data3}')
+####################################################################################################################################
 
-missing_data = (missing_data1 + missing_data2 + missing_data3) / 3.0
-print(f'Missing data percentage mean: {missing_data}')
+# Print missing data percentages
+for i, missing_data in enumerate(missing_data_list, start=1):
+    print(f'Missing data percentage {i}: {missing_data}')
+
+print(f'Missing data percentage mean: {missing_data_mean}')
