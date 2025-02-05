@@ -1,3 +1,6 @@
-__pycache__
-.venv
-.vscode
+/data
+/prep_data
+/__pycache__
+/__venv__
+ctrl/__pycache__
+ctrl/__pycache__
