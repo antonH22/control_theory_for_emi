@@ -33,11 +33,6 @@ def compute_mean_around_nan(df, emas):
 
     return column_means_before_nan, column_means_after_nan
 
-#csv1 = "prep_data/MRT1/11228_12_prep.csv"
-#df1 = pd.read_csv(csv1) 
-#cm1 = compute_mean_around_nan(df1, emas)
-
-
 # Function to compute the deterioration of the means before the nan and the general means
 def compute_deterioration_means(column_means, column_means_nan):
     deterioration = column_means_nan - column_means
@@ -54,6 +49,27 @@ def compute_missing_data_percentage(df):
     num_rows_with_missing_data = df.isna().any(axis=1).sum()  # Count rows with missing values
     return num_rows_with_missing_data / len(df)
 
+# Function to compute the mean of random data to compare deterioration and z_score
+def compute_mean_random_rows(df, emas):
+    missing_rows = df.isna().any(axis=1)
+    start_of_missing = missing_rows & (~missing_rows.shift(1, fill_value=False))
+    indices_before_missing = start_of_missing[start_of_missing].index
+    num_rows = len(indices_before_missing)
+    valid_rows = df[emas].dropna()
+    sampled_rows = valid_rows.sample(n=num_rows)
+    mean_values = sampled_rows.mean()
+    return mean_values
+
+def print_results(csv_file, column_means, column_means_before_nan, deteriorations_before, deteriorations_after, deterioration_random):
+    # Concatenate results into a DataFrame
+    z_scores_before = compute_z_score_deterioration(deteriorations_before)
+    z_scores_after = compute_z_score_deterioration(deteriorations_after)
+    z_scores_random = compute_z_score_deterioration(deterioration_random)
+    print(f'{csv_file}:')
+    concatenated = pd.concat([column_means, column_means_before_nan, deteriorations_before, z_scores_before, z_scores_after, z_scores_random], axis=1)
+    concatenated.columns = ['means', 'means before nan', 'deteriorations before nan', 'z_scores', 'z_scores (after nan)', 'z_scores (random)']
+    print(concatenated)
+    print()
 
 # Get all CSV files in the preprocessed data folder
 prep_data_folder = "prep_data"
@@ -73,67 +89,76 @@ for subfolder in subfolders:
 column_means_list = []
 column_means_before_nan_list = []
 column_means_after_nan_list = []
+column_means_random_list = []
 deterioration_before_list = []
 deterioration_after_list = []
+deterioration_random_list = []
+z_score_before_list = []
 missing_data_list = []
+z_score_random_list = []
 
 # Process each CSV file
 for i,csv_file in enumerate(csv_files):
     df = pd.read_csv(csv_file)
     column_means = compute_mean_without_nan(df, emas)
     column_means_before_nan, column_means_after_nan = compute_mean_around_nan(df, emas)
+    column_means_random = compute_mean_random_rows(df, emas)
     deterioration_before = compute_deterioration_means(column_means, column_means_before_nan)
     deterioration_after = compute_deterioration_means(column_means, column_means_after_nan)
+    deterioration_random = compute_deterioration_means(column_means, column_means_random)
     missing_data = compute_missing_data_percentage(df)
-    
+    z_scores_before = compute_z_score_deterioration(deterioration_before)
+    z_scores_random = compute_z_score_deterioration(deterioration_random)
+
+    # Print results for each dataset
+    #print_results(csv_file, column_means, column_means_before_nan, deterioration_before, deterioration_after, deterioration_random)
+
     column_means_list.append(column_means)
     column_means_before_nan_list.append(column_means_before_nan)
     column_means_after_nan_list.append(column_means_after_nan)
+    column_means_random_list.append(column_means_random)
     deterioration_before_list.append(deterioration_before)
     deterioration_after_list.append(deterioration_after)
+    deterioration_random_list.append(deterioration_random)
     missing_data_list.append(missing_data)
+    z_score_before_list.append(z_scores_before)
+    z_score_random_list.append(z_scores_random)
+
 
 # Compute the mean across all datasets
 column_means = sum(column_means_list) / len(column_means_list)
 column_means_before_nan = sum(column_means_before_nan_list) / len(column_means_before_nan_list)
 column_means_after_nan = sum(column_means_after_nan_list) / len(column_means_after_nan_list)
+column_means_random = sum(column_means_random_list) / len(column_means_random_list)
 deteriorations_before = sum(deterioration_before_list) / len(deterioration_before_list)
 deteriorations_after = sum(deterioration_after_list) / len(deterioration_after_list)
+deterioration_random = sum(deterioration_random_list) / len(deterioration_random_list)
 missing_data_mean = sum(missing_data_list) / len(missing_data_list)
 
+print_results('All datasets', column_means, column_means_before_nan, deteriorations_before, deteriorations_after, deterioration_random)
 
-# Perform the Shapiro-Wilk Test for normality
-#check_aprox_normal = np.array(deteriorations)
-#statistic, p_value = shapiro(check_aprox_normal)
-#print(f"Shapiro-Wilk Test Statistic: {statistic}")
-#print(f"p-value: {p_value}")
+count_significant_deterioration = sum((z_score > 2).sum() for z_score in z_score_before_list)
+print(f'Number of datasets analyzed: {len(csv_files)}')
+print(f'Number of significant deterioration before nan (z-score > 2): {count_significant_deterioration}')
+print(f'Compared to z-score of random missingness: {sum((z_score > 2).sum() for z_score in z_score_random_list)}')
 
-
-# Compute z-scores for deterioration
-z_scores_before = compute_z_score_deterioration(deteriorations_before)
-z_scores_after = compute_z_score_deterioration(deteriorations_after)
-
-print(f'{len(csv_files)} datasets were analyzed')
-# Concatenate results into a DataFrame
-concatenated = pd.concat([column_means, column_means_before_nan, deteriorations_before, z_scores_before, column_means_after_nan, z_scores_after], axis=1)
-concatenated.columns = ['means', 'means before nan', 'deterioration before nan', 'z_score', 'means after nan', 'z_score (after nan)']
-print(concatenated)
-
-# Compute the mean deterioration over all datasets
-mean_deterioration = deteriorations_before.sum() / len(emas)
-print(f'Deterioration (before) mean: {mean_deterioration}')
-
-mean_deterioration_after = deteriorations_after.sum() / len(emas)
-print(f'Deterioration (after) mean: {mean_deterioration_after}')
-
-# Findings:
+# Findings (based on 3 datasets):
 # Higher tiredness, stress are indicator for missing data
 # Indicates that the missing data is not random, but more data needs to be analyzed to confirm this
+
+# Results (Using all datasets):
+# No observable pattern in the deterioration of the means before the missing data (for each participant and on average)
+# The z-scores are not significantly different from the z-scores that were computed from random missingness
+# -> Assume that the missing data is random
+
 print()
 ####################################################################################################################################
+
 # Print missing data percentages
-print(f'File : Missing data')
-for i, missing_data in enumerate(missing_data_list):
-    print(f'{csv_files[i]}: {missing_data:.2%}')
+"""
+#print(f'File || Missing data')
+#for i, missing_data in enumerate(missing_data_list):
+#    print(f'{csv_files[i]}: {missing_data:.2%}')
+"""
 
 print(f'Missing data percentage mean: {missing_data_mean:.2%}')
