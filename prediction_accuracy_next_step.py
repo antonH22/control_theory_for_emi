@@ -36,43 +36,39 @@ skip_files = {'prep_data\\MRT1\\11228_120_prep.csv', 'prep_data\\MRT2\\12600_19_
 for idx, dataset in enumerate(dataset_list):
     if files[idx] in skip_files:
         continue
-
     X, U = dataset['X'], dataset['Inp']
     
+    # Determine the split index for the training and testing data
     valid = ~np.isnan(X).any(axis=1)
     pairs = valid[:-1] & valid[1:]
     total = pairs.sum()
     split_index = np.searchsorted(np.cumsum(pairs), total * 0.7)
     
-    # Split EMA data
+    # Split data
     X_train, X_test = X[:split_index], X[split_index:]
-    
-    # Split input data
     U_train, U_test = U[:split_index], U[split_index:]
-    
-    # Store the split data back into the dataset
-    dataset['X_train'], dataset['X_test'] = X_train, X_test
-    dataset['U_train'], dataset['U_test'] = U_train, U_test
-    
     
     # Infer the A and B matrices using stable ridge regression
     A, B, lmbda = utils.stable_ridge_regression(X_train, U_train)     # the lmbda output is the regularization parameter that is used to render A stable
     
+    # Remove NaN rows from the test data
     mask_nan = np.isnan(X_test).any(axis=1)
     X_test = X_test[~mask_nan]
     U_test = U_test[~mask_nan]
     
+    # Predict the next state using the inferred A and B matrices
     states = []
     for i in range(len(X_test)):
         x_next = doc.step(A, B, X_test[i], U_test[i])
         states.append(x_next)
     
+    # Compute the mean squared error
     states = np.array(states)
     states = states[:-1]
     X_test = X_test[1:]
-
     mse = np.mean((states - X_test)**2)
     mean_squared_errors.append(mse)
+    # Append to files_mean_error_greater_10 if mse > 10 to filter out bad datasets
     if mse > 10:
         files_mean_error_greater_10.append(files[idx])
     # Print results
