@@ -300,7 +300,7 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
 
-def csv_to_dataset(file_path, state_columns, input_columns, invert_columns, drop_nan_rows=False):
+def csv_to_dataset(file_path, state_columns, input_columns, invert_columns):
     ''' Load a CSV file, adjust data and convert it to a datset (dictionary). '''
     csv_df = pd.read_csv(file_path)
     required_columns = state_columns + input_columns
@@ -309,16 +309,6 @@ def csv_to_dataset(file_path, state_columns, input_columns, invert_columns, drop
     # Delete empty rows in the beginning
     first_non_na_index = csv_df.notna().all(axis=1).idxmax()
     csv_df = csv_df.iloc[first_non_na_index:].reset_index(drop=True)
-    # (a) replace nan with column mean
-    """
-    for column in csv_df.columns:
-        if csv_df[column].isnull().any():
-            column_mean = csv_df[column].mean()
-            csv_df[column] = csv_df[column].fillna(column_mean)
-    """
-    # (b) delete nan rows
-    if drop_nan_rows:
-        csv_df.dropna(inplace=True)
     
     # Split into state and input variables (ndarrays)
     X = csv_df[state_columns].values
