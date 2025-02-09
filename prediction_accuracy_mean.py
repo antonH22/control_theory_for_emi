@@ -31,8 +31,7 @@ for subfolder in subfolders:
 
 mean_squared_errors = []
 files_mean_error_greater_10 = []
-# Loop through all datasets in dataset_list
-skip_files = {'prep_data\\MRT1\\11228_120_prep.csv', 'prep_data\\MRT2\\12600_19_prep.csv', 'prep_data\\MRT2\\12600_41_prep.csv', 'prep_data\\MRT2\\12600_63_prep.csv', 'prep_data\\MRT3\\12600_227_prep.csv', 'prep_data\\MRT3\\12600_238_prep.csv', 'prep_data\\MRT3\\12600_270_prep.csv'}
+skip_files = {'prep_data\\MRT1\\11228_58_prep.csv', 'prep_data\\MRT3\\12600_224_prep.csv', 'prep_data\\MRT3\\12600_258_prep.csv', 'prep_data\\MRT3\\12600_270_prep.csv'}
 for idx, dataset in enumerate(dataset_list):
     if files[idx] in skip_files:
         continue
@@ -47,25 +46,41 @@ for idx, dataset in enumerate(dataset_list):
     # Split data
     X_train, X_test = X[:split_index], X[split_index:]
     U_train, U_test = U[:split_index], U[split_index:]
-    
+
+    # Handle missing data using mean imputation method
+    df_helper_mean = pd.DataFrame(X_train)
+    df_helper_mean.fillna(df_helper_mean.mean(), inplace=True)
+    X_train = df_helper_mean.to_numpy()
+  
     # Infer the A and B matrices using stable ridge regression
     A, B, lmbda = utils.stable_ridge_regression(X_train, U_train)     # the lmbda output is the regularization parameter that is used to render A stable
     
     # Remove NaN rows from the test data
+    # Isnt enough because the model cant predict across missing data
     mask_nan = np.isnan(X_test).any(axis=1)
     X_test = X_test[~mask_nan]
     U_test = U_test[~mask_nan]
     
     # Predict the next state using the inferred A and B matrices
     states = []
-    for i in range(len(X_test)):
+    rows_to_delete = [] # To keep track of rows that are skipped in the prediction loop
+    for i in range(len(X_test) -1):
+        # Skip if there is a NaN value in the test data (predictor or target)
+        if np.isnan(X_test[i]).any() or np.isnan(X_test[i + 1]).any():
+            rows_to_delete.append(i)  # Collect the index to delete
+            continue
         x_next = doc.step(A, B, X_test[i], U_test[i])
         states.append(x_next)
     
-    # Compute the mean squared error
-    states = np.array(states)
-    states = states[:-1]
+    X_test = np.delete(X_test, rows_to_delete, axis=0)
     X_test = X_test[1:]
+    states = np.array(states)
+    # If the last row contains NaN, remove it from both X_test and states
+    if np.isnan(X_test[-1]).any():
+        X_test = X_test[:-1]
+        states = states[:-1]
+
+    # Compute the mean squared error
     mse = np.mean((states - X_test)**2)
     mean_squared_errors.append(mse)
     # Append to files_mean_error_greater_10 if mse > 10 to filter out bad datasets
@@ -73,8 +88,6 @@ for idx, dataset in enumerate(dataset_list):
         files_mean_error_greater_10.append(files[idx])
     # Print results
     print(f'{files[idx]}:')
-    print(f'Number of valid predictor pairs: {total}')
-    print(f'Split index (70%): {split_index}')
     print(f'Mean Squared Error: {mse}')
     print('-' * 40)
 
@@ -85,7 +98,7 @@ mean_mean_squared_error = np.mean(mean_squared_errors)
 std_mean_squared_error = np.std(mean_squared_errors)
 
 print(f'Number of datasets analysed: {len(dataset_list)}')
-#print(f'Datasets with Mean Squared Error > 10: {files_mean_error_greater_10}') to filter out bad datasets
+print(f'Datasets with Mean Squared Error > 10: {files_mean_error_greater_10}') # to filter out bad datasets
 print(f'Max Mean Squared Error: {max_mean_squared_error}')
 print(f'Min Mean Squared Error: {min_mean_squared_error}')
 print(f'Mean Mean Squared Error: {mean_mean_squared_error}')
