@@ -30,6 +30,8 @@ for subfolder in subfolders:
             files.append(file)
 
 mean_squared_errors = []
+mean_absolute_errors = []
+mean_absolute_errors_per_variable = []
 files_mean_error_greater_10 = []
 skip_files = {'prep_data\\MRT2\\12600_16_prep.csv', 'prep_data\\MRT2\\12600_19_prep.csv', 'prep_data\\MRT2\\12600_63_prep.csv', 'prep_data\\MRT3\\12600_227_prep.csv', 'prep_data\\MRT3\\12600_238_prep.csv', 'prep_data\\MRT3\\12600_270_prep.csv'}
 for idx, dataset in enumerate(dataset_list):
@@ -41,7 +43,7 @@ for idx, dataset in enumerate(dataset_list):
     valid = ~np.isnan(X).any(axis=1)
     pairs = valid[:-1] & valid[1:]
     total = pairs.sum()
-    split_index = np.searchsorted(np.cumsum(pairs), total * 0.7)
+    split_index = np.searchsorted(np.cumsum(pairs), total * 0.7) #  searches for the index in (np.cumsum(pairs)) where the cumulative sum first exceeds or equals 70%
     
     # Split data
     X_train, X_test = X[:split_index], X[split_index:]
@@ -72,15 +74,30 @@ for idx, dataset in enumerate(dataset_list):
     # Compute the mean squared error
     mse = np.mean((states - X_test)**2)
     mean_squared_errors.append(mse)
+
     # Append to files_mean_error_greater_10 if mse > 10 to filter out bad datasets
     if mse > 10:
         files_mean_error_greater_10.append(files[idx])
+
+    # Compute the Mean Absolute Error (MAE)
+    absolute_differences = np.abs(states - X_test)
+    absolute_errors_per_variable = np.mean(absolute_differences, axis=0)
+    mean_absolute_errors_per_variable.append(absolute_errors_per_variable)
+
+    mae = np.mean(absolute_differences)
+    mean_absolute_errors.append(mae)
+
     # Print results
     print(f'{files[idx]}:')
     print(f'Number of useful rows: {total}')
     #print(f'Split index (70%): {split_index}')
     print(f'Mean Squared Error: {mse}')
+    print(f"Mean Absolute Error: {mae}")
+    # Print the MAE for each variable
+    #df_mae_per_variable = pd.DataFrame({'MAE': absolute_errors_per_variable}, index=emas)
+    #print(df_mae_per_variable)
     print('-' * 40)
+
 
 mean_squared_errors = np.array(mean_squared_errors)
 max_mean_squared_error = np.max(mean_squared_errors)
@@ -88,9 +105,29 @@ min_mean_squared_error = np.min(mean_squared_errors)
 mean_mean_squared_error = np.mean(mean_squared_errors)
 std_mean_squared_error = np.std(mean_squared_errors)
 
+mean_absolute_errors = np.array(mean_absolute_errors)
+max_mean_absolute_error = np.max(mean_absolute_errors)
+min_mean_absolute_error = np.min(mean_absolute_errors)
+mean_mean_absolute_error = np.mean(mean_absolute_errors)
+std_mean_absolute_error = np.std(mean_absolute_errors)
+
+mean_absolute_errors_per_variable = np.mean(mean_absolute_errors_per_variable, axis=0)
+df_mean_mae = pd.DataFrame({
+    'MAE': mean_absolute_errors_per_variable
+}, index = emas)
+
+print('#' * 40)
+print()
 print(f'Number of datasets analysed: {len(dataset_list)}')
 print(f'Datasets with Mean Squared Error > 10: {files_mean_error_greater_10}') # to filter out bad datasets
 print(f'Max Mean Squared Error: {max_mean_squared_error}')
 print(f'Min Mean Squared Error: {min_mean_squared_error}')
 print(f'Mean Mean Squared Error: {mean_mean_squared_error}')
 print(f'Std Mean Squared Error: {std_mean_squared_error}')
+print()
+print(f'Max Mean Absolute Error: {max_mean_absolute_error}')
+print(f'Min Mean Absolute Error: {min_mean_absolute_error}')
+print(f'Mean Mean Absolute Error: {mean_mean_absolute_error}')
+print(f'Std Mean Absolute Error: {std_mean_absolute_error}')
+#print(f'Mean Absolute Errors per variable:')
+#print(df_mean_mae)
