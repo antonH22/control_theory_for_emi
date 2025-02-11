@@ -17,7 +17,7 @@ csv_files = glob.glob(os.path.join(input_folder, "*.csv"))
 for csv_file in csv_files:
     filename = os.path.basename(csv_file)
     # Select the emas and emis and remove missing rows at the beginning
-    data = utils.csv_to_dataset(csv_file, emas, emis, invert_columns)
+    data = utils.csv_to_dataset(csv_file, emas, emis, invert_columns, regularize=True)
     filename = filename.replace(".csv", "_prep.csv")
     output_path = os.path.join(output_folder, filename)
     # Save the preprocessed data to a CSV file
