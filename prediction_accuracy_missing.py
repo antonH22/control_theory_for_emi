@@ -38,7 +38,7 @@ mac_per_ema_list = []
 mac_list = []
 msc_list = []
 
-#high_mean_error_files = []
+high_mse_files = []
 skip_files = {}
 num_analysed_files = 0
 for idx, dataset in enumerate(dataset_list):
@@ -125,19 +125,19 @@ for idx, dataset in enumerate(dataset_list):
     num_interventions_test = U_test.sum()
 
     # Append to files_mean_error_greater_10 if mse > 10 to filter out bad datasets
-    #if mse > 4:
-     #   high_mean_error_files.append(files[idx])
+    if mse > 4:
+        high_mse_files.append(files[idx])
     
     # Print results
     print('-' * 40)
     print(f'{files[idx]}:')
     print(f'Number of valid rows: {total}')
     print(f'Split index (70%): {split_index}')
-    print(f'Mean Squared Error: {np.round(mse,2)}')
-    print(f'Mean Squared Change: {np.round(msc,2)}')
-    print(f'Baseline Mean Squared Error: {np.round(baseline_mse,2)}')
-    print(f'Mean Absolute Error: {np.round(mae,2)}')
-    print(f'Mean Absolute Change: {np.round(mac,2)}')
+    print(f'MSE: {np.round(mse,2)}')
+    print(f'MSC: {np.round(msc,2)}')
+    print(f'Baseline MSE: {np.round(baseline_mse,2)}')
+    print(f'MAE: {np.round(mae,2)}')
+    print(f'MAC: {np.round(mac,2)}')
     #Print the MAE for each variable
     #df_mae_per_variable = pd.DataFrame({'MAE': np.round(mean_absolute_errors,2), 'real': np.round(mean_real_abs_differences,2)}, index=emas)
     #print(df_mae_per_variable)
@@ -178,18 +178,18 @@ print()
 print('#' * 40)
 print()
 print(f'Number of datasets analysed: {num_analysed_files}')
-#print(f'Datasets with Mean Squared Error > 4: {high_mean_error_files}') # to filter out bad datasets
+#print(f'Datasets with MSE > 4: {high_mse_files}') # to filter out bad datasets
 print()
-#print(f'Max Mean Squared Error: {max_mean_squared_error}')
-#print(f'Min Mean Squared Error: {min_mean_squared_error}')
-print(f'Mean Mean Squared Error: {np.round(mean_mse,2)} ({np.round(std_mse,2)})')
-print(f'Mean Mean Squared Change: {np.round(mean_msc,2)}')
-print(f'Mean Baseline Mean Squared Error: {np.round(mean_baseline_mse,2)}')
+#print(f'Max MSE: {max_mse}')
+#print(f'Min MSE: {min_mse}')
+print(f'Mean MSE: {np.round(mean_mse,2)} ({np.round(std_mse,2)})')
+print(f'Mean MSC: {np.round(mean_msc,2)}')
+print(f'Mean Baseline MSE: {np.round(mean_baseline_mse,2)}')
 print()
-#print(f'Max Mean Absolute Error: {max_mean_absolute_error}')
-#print(f'Min Mean Absolute Error: {min_mean_absolute_error}')
-print(f'Mean Mean Absolute Error: {np.round(mean_mae,2)} ({np.round(std_mae,2)})')
-print(f'Mean Mean Absolute Change: {np.round(mean_mac,2)}')
+#print(f'Max MAE: {max_mae}')
+#print(f'Min MAE: {min_mae}')
+print(f'Mean MAE: {np.round(mean_mae,2)} ({np.round(std_mae,2)})')
+print(f'Mean MAC: {np.round(mean_mac,2)}')
 print()
 print(f'MAE and MAC per EMA:')
 print(df_mean_mae)
