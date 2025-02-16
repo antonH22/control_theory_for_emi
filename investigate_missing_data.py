@@ -84,7 +84,7 @@ if __name__ == "__main__":
         for file in glob.glob(folder_path):
             df = pd.read_csv(file)
             missing_data_percentage = compute_missing_data_percentage(df)
-            if missing_data_percentage < 0.5:
+            if missing_data_percentage < 1:
                 csv_files.append(file)
 
     # Initialize lists to store results
@@ -113,7 +113,8 @@ if __name__ == "__main__":
         z_scores_random = compute_z_score_deterioration(deterioration_random)
 
         # Print results for each dataset
-        #print_results(csv_file, column_means, column_means_before_nan, deterioration_before, deterioration_after, deterioration_random)
+        print_results(csv_file, column_means, column_means_before_nan, deterioration_before, deterioration_after, deterioration_random)
+        print('-'*120)
 
         column_means_list.append(column_means)
         column_means_before_nan_list.append(column_means_before_nan)
@@ -137,12 +138,15 @@ if __name__ == "__main__":
     deterioration_random = sum(deterioration_random_list) / len(deterioration_random_list)
     missing_data_mean = sum(missing_data_list) / len(missing_data_list)
 
+    print('#'*120)
+    print(f'Number of datasets analyzed: {len(csv_files)}')
     print_results('All datasets', column_means, column_means_before_nan, deteriorations_before, deteriorations_after, deterioration_random)
 
-    count_significant_deterioration = sum((z_score > 2).sum() for z_score in z_score_before_list)
-    print(f'Number of datasets analyzed: {len(csv_files)}')
+    count_significant_deterioration = sum((np.abs(z_score) > 2).sum() for z_score in z_score_before_list)
+    count_significant_deterioration_random = sum((np.abs(z_score) > 2).sum() for z_score in z_score_random_list)
+    
     print(f'Number of significant deterioration before nan (z-score > 2): {count_significant_deterioration}')
-    print(f'Compared to z-score of random missingness: {sum((z_score > 2).sum() for z_score in z_score_random_list)}')
+    print(f'Compared to z-score of random missingness: {count_significant_deterioration_random}')
 
     # Findings (based on 3 datasets):
     # Higher tiredness, stress are indicator for missing data
