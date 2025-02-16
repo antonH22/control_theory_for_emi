@@ -3,7 +3,7 @@ import os
 import glob
 
 # Preprocess data and save in preprocessed_data folder
-emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed']
+emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed', 'Positive affect', 'Negative affect', 'Self-esteem', 'Worrying', 'Activity level','Stress','Social isolation','Resilience']
 emis = ['interactive1', 'interactive2', 'interactive3', 'interactive4', 'interactive5', 'interactive6', 'interactive7', 'interactive8']
 invert_columns = ['EMA_mood', 'EMA_confidence', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_satisfied', 'EMA_relaxed']
 
@@ -17,7 +17,7 @@ csv_files = glob.glob(os.path.join(input_folder, "*.csv"))
 for csv_file in csv_files:
     filename = os.path.basename(csv_file)
     # Select the emas and emis and remove missing rows at the beginning
-    data = utils.csv_to_dataset(csv_file, emas, emis, invert_columns, regularize=True)
+    data = utils.csv_to_dataset(csv_file, emas, emis, invert_columns=[],regularize=True)
     filename = filename.replace(".csv", "_prep.csv")
     output_path = os.path.join(output_folder, filename)
     # Save the preprocessed data to a CSV file
