@@ -300,7 +300,7 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
 
-def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=None, regularize=False):
+def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=[], regularize=False):
     ''' Load a CSV file, adjust data and convert it to a datset (dictionary). '''
     csv_df = pd.read_csv(file_path)
     required_columns = state_columns + input_columns
