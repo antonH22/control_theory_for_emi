@@ -100,7 +100,7 @@ def simulate_pendulum(x_0, x_ref, A, B, noise_std, num_steps):
         u = -K @ (x_t - reference.T)
         #u = np.array([0.0])
         # Update the state using the nonlinear or linear dynamics function
-        x_t = simulate_system_step_linear(x_t, u, noise_std)  # Get the next state
+        x_t = simulate_system_step_nonlinear(x_t, u, noise_std)  # Get the next state
 
         # Append the updated state and control input
         states.append(x_t)
