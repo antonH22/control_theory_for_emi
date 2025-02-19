@@ -15,9 +15,16 @@ prep_data_folder = "prep_data"
 subfolders = ["MRT1","MRT2","MRT3"]
 files = []
 
+# Last Observation Carried Forward (LOCF) method for handling missing data
+def locf(X_train): 
+    df_helper_locf = pd.DataFrame(X_train)
+    df_helper_locf.fillna(method='ffill', inplace=True)
+    X_train_locf = df_helper_locf.to_numpy()
+    return X_train_locf
+
 # Set the threshold for missing data and the number of valid rows
 missing_data_threshold = 1.0
-valid_rows_threshold = 100
+valid_rows_threshold = 0
 
 for subfolder in subfolders:
     folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
@@ -65,9 +72,7 @@ for idx, dataset in enumerate(dataset_list):
     U_train, U_test = U[:split_index], U[split_index:]
 
     # Handle missing data using Last Observation Carried Forward (LOCF) method
-    df_helper_locf = pd.DataFrame(X_train)
-    df_helper_locf.fillna(method='ffill', inplace=True)
-    X_train = df_helper_locf.to_numpy()
+    X_train = locf(X_train)
 
     # Infer the A and B matrices using stable ridge regression
     A, B, lmbda = utils.stable_ridge_regression(X_train, U_train) # the lmbda output is the regularization parameter that is used to render A stable
@@ -79,11 +84,18 @@ for idx, dataset in enumerate(dataset_list):
 
     #print('Timestep | Predictor | Target | Prediction  (mood)')
     for i in range(len(X_test) -1):
+        # Include NaN data in the training set so that they can be imputed
+        X_train = np.append(X_train, X_test[i:i+1], axis=0)
+        U_train = np.append(U_train, U_test[i:i+1], axis=0)
+
         # Skip if there is a NaN value in the test data in predictor or target
         if np.isnan(X_test[i]).any() or np.isnan(X_test[i + 1]).any():
             continue
         real_predictor_states.append(X_test[i])
         real_target_states.append(X_test[i+1])
+        # Handle missing data using LOCF method
+        X_train = locf(X_train)
+        A, B, lmbda = utils.stable_ridge_regression(X_train, U_train)
         x_next = doc.step(A, B, X_test[i], U_test[i])
         predicted_states.append(x_next)
         
