@@ -5,6 +5,7 @@ import numpy as np
 import os
 import glob
 import pandas as pd
+import matplotlib.pyplot as plt
 
 dataset_list = []
 
@@ -17,7 +18,8 @@ files = []
 
 # Set the threshold for missing data and the number of valid rows
 missing_data_threshold = 1.0
-valid_rows_threshold = 0
+num_valid_training_rows = 50
+valid_rows_threshold = 100
 
 for subfolder in subfolders:
     folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
@@ -29,6 +31,19 @@ for subfolder in subfolders:
             dataset_list.append(data)
             files.append(file)
 
+
+def compute_max_len(files):
+    max_len = 0
+    max_file = ''
+    for file in files:
+        df = pd.read_csv(file)
+        num_valid_rows = ((df.notna() & df.shift(-1).notna()).all(axis=1)).sum() - 1
+        if num_valid_rows > max_len:
+            max_len = num_valid_rows
+            max_file = file
+    print(f'Maximum number of valid rows: {max_len} in {max_file}')
+    return max_len
+
 mean_per_ema_list = []
 
 mse_list = []
@@ -39,6 +54,10 @@ mae_list = []
 mac_per_ema_list = []
 mac_list = []
 msc_list = []
+
+mse_per_step_overall_list = []
+mae_per_step_overall_list = []
+max_len = valid_rows_threshold
 
 high_mse_files = []
 skip_files = {}
@@ -56,7 +75,7 @@ for idx, dataset in enumerate(dataset_list):
     valid = ~np.isnan(X).any(axis=1)
     valid_rows = valid[:-1] & valid[1:] # valid rows are those where the predictor and target are both valid (no NaN values)
     total = valid_rows.sum() # total number of valid rows
-    split_index = np.searchsorted(np.cumsum(valid_rows), total * 0.7) # searches for the index in (np.cumsum(pairs)) where the cumulative sum first exceeds or equals 70
+    split_index = np.searchsorted(np.cumsum(valid_rows), num_valid_training_rows) # searches for the index in (np.cumsum(pairs)) where the cumulative sum first exceeds or equals 50
     # Leads to lower standard deviation of the mean squared error and mean absolute error (compared to split_index = int(0.7 * len(X)))
 
     # Skip if there are less than  valid row
@@ -77,19 +96,44 @@ for idx, dataset in enumerate(dataset_list):
     real_predictor_states = [] # To keep track of rows that are skipped in the prediction loop
     real_target_states = []
 
-    #print('Timestep | Predictor | Target | Prediction  (mood)')
+    mse_per_step_list = []
+    mae_per_step_list = []
+
+    # Prediction loop for the training data
+    for i in range(len(X_train) -1):
+        # Skip if there is a NaN value in the training data in predictor or target
+        if np.isnan(X_train[i]).any() or np.isnan(X_train[i + 1]).any():
+            continue
+        real_predictor_states.append(X_train[i])
+        real_target_states.append(X_train[i+1])
+        x_next = doc.step(A, B, X_train[i], U_train[i])
+        predicted_states.append(x_next)
+
+        # Compute the MSE and MAE per time step
+        mse_per_step = np.mean((x_next - X_train[i+1])**2)
+        mae_per_step = np.mean(np.abs(x_next - X_train[i+1]))
+        mse_per_step_list.append(mse_per_step)
+        mae_per_step_list.append(mae_per_step)
+
+    # Prediction loop for the testing data
     for i in range(len(X_test) -1):
+        # Include NaN data in the training set so that ridge regression to disregard non valid rows
+        X_train = np.append(X_train, X_test[i:i+1], axis=0)
+        U_train = np.append(U_train, U_test[i:i+1], axis=0)
         # Skip if there is a NaN value in the test data in predictor or target
         if np.isnan(X_test[i]).any() or np.isnan(X_test[i + 1]).any():
             continue
         real_predictor_states.append(X_test[i])
         real_target_states.append(X_test[i+1])
+        A , B, lmbda = utils.stable_ridge_regression(X_train, U_train)
         x_next = doc.step(A, B, X_test[i], U_test[i])
         predicted_states.append(x_next)
-        
-        # To see that it works correctly
-        timestep = i + 2 + split_index
-        #print(timestep, X_test[i][0], X_test[i+1][0], np.round(x_next[0],2))
+
+        # Compute the MSE and MAE per time step
+        mse_per_step = np.mean((x_next - X_test[i+1])**2)
+        mae_per_step = np.mean(np.abs(x_next - X_test[i+1]))
+        mse_per_step_list.append(mse_per_step)
+        mae_per_step_list.append(mae_per_step)
 
     predicted_states = np.array(predicted_states)
     real_predictor_states = np.array(real_predictor_states)
@@ -129,6 +173,9 @@ for idx, dataset in enumerate(dataset_list):
     num_interventions_train = U_train.sum()
     num_interventions_test = U_test.sum()
 
+    mse_per_step_overall_list.append(mse_per_step_list[:max_len])
+    mae_per_step_overall_list.append(mae_per_step_list[:max_len])
+
     # Append to files_mean_error_greater_10 if mse > 10 to filter out bad datasets
     if mse > 4:
         high_mse_files.append(files[idx])
@@ -137,12 +184,14 @@ for idx, dataset in enumerate(dataset_list):
     print('-' * 40)
     print(f'{files[idx]}:')
     print(f'Number of valid rows: {total}')
-    print(f'Split index (70%): {split_index}')
+    print(f'Split index: {split_index}')
+    """
     print(f'MSE: {np.round(mse,2)}')
     print(f'MSC: {np.round(msc,2)}')
     print(f'Baseline MSE: {np.round(baseline_mse,2)}')
     print(f'MAE: {np.round(mae,2)}')
     print(f'MAC: {np.round(mac,2)}')
+    """
     #Print the MAE for each variable
     #df_mae_per_variable = pd.DataFrame({'MAE': np.round(mean_absolute_errors,2), 'real': np.round(mean_real_abs_differences,2)}, index=emas)
     #print(df_mae_per_variable)
@@ -208,3 +257,20 @@ df_mean_ema = pd.DataFrame({
 }, index = emas)
 #print(df_mean_ema)
 #print(f'Mean overall EMA: {np.round(mean_ema_overall,2)}')
+
+mse_per_step_overall_array = np.array(mse_per_step_overall_list)
+mae_per_step_overall_array = np.array(mae_per_step_overall_list)
+mse_per_step_overall_mean = np.mean(mse_per_step_overall_array, axis=0)
+mae_per_step_overall_mean = np.mean(mae_per_step_overall_array, axis=0)
+
+# Create a plot
+plt.plot(mse_per_step_overall_mean, linestyle='-', color='red', label='MSE')
+plt.plot(mae_per_step_overall_mean, linestyle='-', color='blue', label='MAE')
+
+# Add titles and labels
+plt.title("MSE and MAE per Step (Overall Mean)")
+plt.xlabel("Step")
+plt.ylabel("MSE")
+
+# Display the plot
+plt.show()
