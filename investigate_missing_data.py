@@ -13,24 +13,41 @@ def compute_mean_without_nan(df, emas):
     column_means = rows_without_nan.mean(skipna=True)
     return column_means
 
-# Function to compute the mean of the EMAS before/after missing data
-def compute_mean_around_nan(df, emas):
+# Used to compute the mean over all csvs
+def select_rows_before_nan(df, emas):
+    # Get indices immediately BEFORE missing data
     df = df[emas]
     missing_rows = df.isna().any(axis=1)
-    # Get indices immediately BEFORE missing data
     start_of_missing = missing_rows & (~missing_rows.shift(1, fill_value=False))
     indices_before_missing = start_of_missing[start_of_missing].index - 1
-
-    # Get indices immediately AFTER missing data
-    end_of_missing = (~missing_rows) & (missing_rows.shift(1, fill_value=False))
-    indices_after_missing = end_of_missing[end_of_missing].index
-
     rows_before_nan = df.loc[indices_before_missing]
-    column_means_before_nan = rows_before_nan.mean(skipna=True)
+    return rows_before_nan
 
+def select_rows_after_nan(df, emas):
+    # Get indices immediately AFTER missing data
+    df = df[emas]
+    missing_rows = df.isna().any(axis=1)
+    end_of_missing = missing_rows & (~missing_rows.shift(-1, fill_value=False))
+    indices_after_missing = end_of_missing[end_of_missing].index + 1
+    indices_after_missing = indices_after_missing[indices_after_missing < len(df)]
     rows_after_nan = df.loc[indices_after_missing]
-    column_means_after_nan = rows_after_nan.mean(skipna=True)
+    return rows_after_nan
 
+def select_random_rows(df):
+    missing_rows = df.isna().any(axis=1)
+    start_of_missing = missing_rows & (~missing_rows.shift(1, fill_value=False))
+    indices_before_missing = start_of_missing[start_of_missing].index
+    num_rows = len(indices_before_missing)
+    valid_rows = df.dropna()
+    sampled_rows = valid_rows.sample(n=num_rows)
+    return sampled_rows
+
+# Function to compute the mean of the EMAS before/after missing data
+def compute_mean_around_nan(df, emas):
+    rows_before_nan = select_rows_before_nan(df, emas)
+    column_means_before_nan = rows_before_nan.mean(skipna=True)
+    rows_after_nan = select_rows_after_nan(df, emas)
+    column_means_after_nan = rows_after_nan.mean(skipna=True)
     return column_means_before_nan, column_means_after_nan
 
 # Function to compute the deterioration of the means before the nan and the general means
@@ -51,25 +68,89 @@ def compute_missing_data_percentage(df):
 
 # Function to compute the mean of random data to compare deterioration and z_score
 def compute_mean_random_rows(df, emas):
-    missing_rows = df.isna().any(axis=1)
-    start_of_missing = missing_rows & (~missing_rows.shift(1, fill_value=False))
-    indices_before_missing = start_of_missing[start_of_missing].index
-    num_rows = len(indices_before_missing)
-    valid_rows = df[emas].dropna()
-    sampled_rows = valid_rows.sample(n=num_rows)
+    df = df[emas]
+    sampled_rows = select_random_rows(df)
     mean_values = sampled_rows.mean()
     return mean_values
 
-def print_results(csv_file, column_means, column_means_before_nan, deteriorations_before, deteriorations_after, deterioration_random):
+
+def bootstrap_ci(data, func=np.mean, n_bootstrap=1000, ci=95, seed=None):
+    """
+    Computes a bootstrap confidence interval for a given statistic.
+
+    Parameters:
+    - data (array-like): The sample data.
+    - func (callable): The statistic function (default: np.mean).
+    - n_bootstrap (int): Number of bootstrap resamples.
+    - ci (float): Confidence level (default: 95%).
+    - seed (int, optional): Random seed for reproducibility.
+
+    Returns:
+    - tuple: (lower bound, upper bound) of the confidence interval.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+    
+    bootstrap_samples = np.array([func(np.random.choice(data, size=len(data), replace=True)) for _ in range(n_bootstrap)])
+    lower, upper = np.percentile(bootstrap_samples, [(100 - ci) / 2, 100 - (100 - ci) / 2])
+    return lower, upper
+
+# Apply bootstrapping to each column in the dataframe (each EMA variable)
+def apply_bootstrapping(df, n_bootstrap=1000, ci=95, seed=None):
+    bootstrap_results = {}
+
+    for ema in df.columns:
+        data = df[ema].values
+        lower, upper = bootstrap_ci(data, n_bootstrap=n_bootstrap, ci=ci, seed=seed)
+        bootstrap_results[ema] = [lower, upper]
+
+    # Convert the results to a DataFrame for better readability
+    df_bootstrap = pd.DataFrame.from_dict(bootstrap_results, orient='index', columns=['CI_Lower', 'CI_Upper'])
+
+    return df_bootstrap
+
+def print_results(csv_file, column_means, column_means_before_nan, deteriorations_before, deteriorations_after, deterioration_random, bootstrap_df, bootstrap_random_df):
     # Concatenate results into a DataFrame
     z_scores_before = compute_z_score_deterioration(deteriorations_before)
     z_scores_after = compute_z_score_deterioration(deteriorations_after)
-    z_scores_random = compute_z_score_deterioration(deterioration_random)
+    z_scores_random = compute_z_score_deterioration(deterioration_random) 
+
     print(f'{csv_file}:')
-    concatenated = pd.concat([column_means, column_means_before_nan, deteriorations_before, z_scores_before, z_scores_after, z_scores_random], axis=1)
-    concatenated.columns = ['means', 'means before nan', 'deteriorations before nan', 'z_scores', 'z_scores (after nan)', 'z_scores (random)']
+    concatenated = pd.concat([column_means, column_means_before_nan, deteriorations_before, significant_bootstrap, z_scores_before, z_scores_after, z_scores_random], axis=1)
+    concatenated.columns = ['means', 'means b. nan', 'deteriorations b. nan','significant (bootstr.)','z_scores', 'z_scores (after nan)', 'z_scores (random)']
     print(concatenated)
     print()
+    
+    print("Bootstrapping confidence intervals for deterioration values:")
+    # Join the bootstrap results with the original deterioration values
+    df_deterioration = pd.DataFrame({"Deterioration": deteriorations_before})
+    # Display the final table
+    # Rename columns in bootstrap_random_df
+    bootstrap_random_df = bootstrap_random_df.rename(columns={"CI_Lower": "CI_Lower_random", "CI_Upper": "CI_Upper_random"})
+    df_bootstrap_results = df_deterioration.join(bootstrap_df).join(bootstrap_random_df)
+    print(df_bootstrap_results)
+
+def print_correct_overall_results(column_means, column_means_before_nan, column_means_before_nan_correct, deteriorations_before, correct_deterioration_before, deterioration_random, overall_deteriorations_df):
+    z_scores_before = compute_z_score_deterioration(deteriorations_before)
+    z_scores_correct = compute_z_score_deterioration(correct_deterioration_before)
+    z_scores_random = compute_z_score_deterioration(deterioration_random)
+
+    df_bootstrap = apply_bootstrapping(overall_deteriorations_df, n_bootstrap=10000, seed=42)
+    significant_bootstrap = (df_bootstrap["CI_Lower"] > 0) | (df_bootstrap["CI_Upper"] < 0)
+
+    concatenated = pd.concat([column_means, column_means_before_nan, column_means_before_nan_correct, deteriorations_before, correct_deterioration_before, significant_bootstrap, z_scores_before,  z_scores_correct, deterioration_random, z_scores_random], axis=1)
+    concatenated.columns = ['means', 'means nan','means nan (correct)', 'deterioration','deterioration (correct)','significant (bootstr.)', 'z-score', 'z-score (correct)','deteriorations random', 'z-score (random)']
+    print(concatenated)
+    print()
+    print("Bootstrapping confidence intervals for deterioration values:")
+    # Join the bootstrap results with the original deterioration values
+    df_deterioration = pd.DataFrame({"Deterioration": deteriorations_before})
+    # Display the final table
+    df_bootstrap_results = df_deterioration.join(df_bootstrap)
+    print(df_bootstrap_results)
+    print('-'*120)
+    
+
 
 # This block will only run if the script is executed directly
 if __name__ == "__main__":
@@ -99,8 +180,16 @@ if __name__ == "__main__":
     missing_data_list = []
     z_score_random_list = []
 
+    rows_before_nan_overall_df = pd.DataFrame()
+    random_rows = pd.DataFrame() # The number of random rows is equal to the number of rows before nan
+    overall_deteriorations_df = pd.DataFrame()
+    overall_random_deteriorations_df = pd.DataFrame()
+    overall_num_significant_bootstrap = 0
+    overall_num_significant_bootstrap_random = 0
+
     # Process each CSV file
     for i,csv_file in enumerate(csv_files):
+        rows_before_nan_df = pd.DataFrame()
         df = pd.read_csv(csv_file)
         column_means = compute_mean_without_nan(df, emas)
         column_means_before_nan, column_means_after_nan = compute_mean_around_nan(df, emas)
@@ -112,9 +201,37 @@ if __name__ == "__main__":
         z_scores_before = compute_z_score_deterioration(deterioration_before)
         z_scores_random = compute_z_score_deterioration(deterioration_random)
 
+        rows_before_nan_df = select_rows_before_nan(df, emas)
+        rows_before_nan_overall_df = pd.concat([rows_before_nan_overall_df, rows_before_nan_df], axis = 0)
+
+        random_rows_df = pd.concat([random_rows, select_random_rows(df)], axis = 0)
+        random_rows_df = random_rows_df[emas]
+
+        random_deteriorations_df = random_rows_df - column_means
+        overall_deteriorations_df = pd.concat([overall_random_deteriorations_df, random_deteriorations_df], axis = 0)
+
+        deteriorations_df = rows_before_nan_df - column_means
+        overall_deteriorations_df = pd.concat([overall_deteriorations_df, deteriorations_df], axis = 0)
+
+        # Bootstrap confidence intervals for deterioration values
+        bootstrap_df = apply_bootstrapping(deteriorations_df, seed=42)
+        significant_bootstrap = (bootstrap_df["CI_Lower"] > 0) | (bootstrap_df["CI_Upper"] < 0)
+        num_significant_bootstrap = significant_bootstrap.sum()
+        overall_num_significant_bootstrap += num_significant_bootstrap
+
+        # Bootstrap confidence intervals for random deterioration values
+        bootstrap_random_df = apply_bootstrapping(random_deteriorations_df, seed=42)
+        significant_bootstrap_random = (bootstrap_random_df["CI_Lower"] > 0) | (bootstrap_random_df["CI_Upper"] < 0)
+        num_significant_bootstrap_random = significant_bootstrap_random.sum()
+        overall_num_significant_bootstrap_random += num_significant_bootstrap_random
+
         # Print results for each dataset
-        print_results(csv_file, column_means, column_means_before_nan, deterioration_before, deterioration_after, deterioration_random)
+        #print_results(csv_file, column_means, column_means_before_nan, deterioration_before, deterioration_after, deterioration_random, bootstrap_df, bootstrap_random_df)
+        print(f'{csv_file}:')
+        print(f'Number of significant deterioration before nan (bootstrap): {num_significant_bootstrap}')
+        print(f'Compared to number of random missingness: {num_significant_bootstrap_random}')
         print('-'*120)
+        # Convert to DataFrame
 
         column_means_list.append(column_means)
         column_means_before_nan_list.append(column_means_before_nan)
@@ -131,19 +248,24 @@ if __name__ == "__main__":
     # Compute the mean across all datasets
     column_means = sum(column_means_list) / len(column_means_list)
     column_means_before_nan = sum(column_means_before_nan_list) / len(column_means_before_nan_list)
+    column_means_before_nan_correct = rows_before_nan_overall_df.mean()
+    correct_deterioration_before= compute_deterioration_means(column_means, column_means_before_nan_correct)
     column_means_after_nan = sum(column_means_after_nan_list) / len(column_means_after_nan_list)
     column_means_random = sum(column_means_random_list) / len(column_means_random_list)
     deteriorations_before = sum(deterioration_before_list) / len(deterioration_before_list)
     deteriorations_after = sum(deterioration_after_list) / len(deterioration_after_list)
-    deterioration_random = sum(deterioration_random_list) / len(deterioration_random_list)
+    deterioration_random = compute_deterioration_means(column_means, random_rows_df.mean())
     missing_data_mean = sum(missing_data_list) / len(missing_data_list)
 
     print('#'*120)
     print(f'Number of datasets analyzed: {len(csv_files)}')
-    print_results('All datasets', column_means, column_means_before_nan, deteriorations_before, deteriorations_after, deterioration_random)
+    print_correct_overall_results(column_means, column_means_before_nan, column_means_before_nan_correct, deteriorations_before, correct_deterioration_before, deterioration_random, overall_deteriorations_df)
 
     count_significant_deterioration = sum((np.abs(z_score) > 2).sum() for z_score in z_score_before_list)
     count_significant_deterioration_random = sum((np.abs(z_score) > 2).sum() for z_score in z_score_random_list)
+
+    print(f'Number of significant deterioration before nan (bootstrap): {overall_num_significant_bootstrap}')
+    print(f'Compared to number of random missingness: {overall_num_significant_bootstrap_random}')
     
     print(f'Number of significant deterioration before nan (z-score > 2): {count_significant_deterioration}')
     print(f'Compared to z-score of random missingness: {count_significant_deterioration_random}')
