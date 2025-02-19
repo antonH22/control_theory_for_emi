@@ -17,7 +17,7 @@ files = []
 
 # Set the threshold for missing data and the number of valid rows
 missing_data_threshold = 1.0
-valid_rows_threshold = 50
+valid_rows_threshold = 100
 
 for subfolder in subfolders:
     folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")

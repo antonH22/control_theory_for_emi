@@ -17,7 +17,7 @@ files = []
 
 # Set the threshold for missing data and the number of valid rows
 missing_data_threshold = 1.0
-valid_rows_threshold = 50
+valid_rows_threshold = 0
 
 for subfolder in subfolders:
     folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
@@ -25,9 +25,11 @@ for subfolder in subfolders:
         df = pd.read_csv(file)
         missing_data_percentage = compute_missing_data_percentage(df)
         if missing_data_percentage < missing_data_threshold:
-            data = utils.csv_to_dataset(file, emas, emis, [])
+            data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
             dataset_list.append(data)
             files.append(file)
+
+mean_per_ema_list = []
 
 mse_list = []
 baseline_mse_list = []
@@ -46,6 +48,9 @@ for idx, dataset in enumerate(dataset_list):
         continue
 
     X, U = dataset['X'], dataset['Inp']
+
+    mean_per_ema = np.nanmean(X, axis=0)
+    mean_per_ema_list.append(mean_per_ema)
     
     # Determine the split index for the training and testing data
     valid = ~np.isnan(X).any(axis=1)
@@ -166,13 +171,13 @@ mac_per_ema_array = np.array(mac_per_ema_list)
 mean_mac_per_ema = np.mean(mac_per_ema_array, axis=0)
 mean_mac = np.mean(mean_mac_per_ema)
 
+mean_per_ema_array = np.array(mean_per_ema_list)
+mean_per_ema = np.mean(mean_per_ema_array, axis=0)
+mean_ema_overall = np.mean(mean_per_ema)
+mean_ema_overall2 = np.mean(mean_per_ema_array)
+
 msc_array = np.array(msc_list)
 mean_msc = np.mean(msc_array)
-
-df_mean_mae = pd.DataFrame({
-    'MAE': np.round(mean_mae_per_ema,2),
-    'MAC': np.round(mean_mac_per_ema,2)
-}, index = emas)
 
 print()
 print('#' * 40)
@@ -192,4 +197,14 @@ print(f'Mean MAE: {np.round(mean_mae,2)} ({np.round(std_mae,2)})')
 print(f'Mean MAC: {np.round(mean_mac,2)}')
 print()
 print(f'MAE and MAC per EMA:')
+df_mean_mae = pd.DataFrame({
+    'MAE': np.round(mean_mae_per_ema,2),
+    'MAC': np.round(mean_mac_per_ema,2)
+}, index = emas)
 print(df_mean_mae)
+print()
+df_mean_ema = pd.DataFrame({
+    'mean': np.round(mean_per_ema,2)
+}, index = emas)
+#print(df_mean_ema)
+#print(f'Mean overall EMA: {np.round(mean_ema_overall,2)}')

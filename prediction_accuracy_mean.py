@@ -8,7 +8,7 @@ import pandas as pd
 
 dataset_list = []
 
-emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed']
+emas = ['EMA_mood', 'EMA_energetic','EMA_disappointed','EMA_resilience']
 emis = ['interactive1', 'interactive2', 'interactive3', 'interactive4', 'interactive5', 'interactive6', 'interactive7', 'interactive8']
 
 prep_data_folder = "prep_data"
@@ -17,7 +17,7 @@ files = []
 
 # Set the threshold for missing data and the number of valid rows
 missing_data_threshold = 1.0
-valid_rows_threshold = 50
+valid_rows_threshold = 0
 
 for subfolder in subfolders:
     folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
@@ -175,7 +175,7 @@ msc_array = np.array(msc_list)
 mean_msc = np.mean(msc_array)
 
 df_mean_mae = pd.DataFrame({
-    'MAE': np.round(mean_mae_per_ema,2),
+    'MAE': np.round(mean_mae_per_ema,4),
     'MAC': np.round(mean_mac_per_ema,2)
 }, index = emas)
 
