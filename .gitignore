@@ -5,3 +5,6 @@
 /__venv__
 ctrl/__pycache__
 ctrl/__pycache__
+/prediction_accuracy_missing2.py
+/prediction_accuracy_locf2.py
+/prediction_accuracy_mean2.py
