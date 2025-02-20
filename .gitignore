@@ -1,6 +1,6 @@
 /data
 /prep_data
-/prep_data2
+/prep_data_smoothed
 /__pycache__
 /__venv__
 ctrl/__pycache__
