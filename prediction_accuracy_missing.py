@@ -17,19 +17,17 @@ subfolders = ["MRT1","MRT2","MRT3"]
 files = []
 
 # Set the threshold for missing data and the number of valid rows
-missing_data_threshold = 1.0
 num_valid_training_rows = 50
-valid_rows_threshold = 100
+valid_rows_threshold = 70
+max_len = 200
 
 for subfolder in subfolders:
     folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
     for file in glob.glob(folder_path):
         df = pd.read_csv(file)
-        missing_data_percentage = compute_missing_data_percentage(df)
-        if missing_data_percentage < missing_data_threshold:
-            data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
-            dataset_list.append(data)
-            files.append(file)
+        data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
+        dataset_list.append(data)
+        files.append(file)
 
 
 def compute_max_len(files):
@@ -57,7 +55,6 @@ msc_list = []
 
 mse_per_step_overall_list = []
 mae_per_step_overall_list = []
-max_len = valid_rows_threshold
 
 high_mse_files = []
 skip_files = {}
@@ -76,7 +73,6 @@ for idx, dataset in enumerate(dataset_list):
     valid_rows = valid[:-1] & valid[1:] # valid rows are those where the predictor and target are both valid (no NaN values)
     total = valid_rows.sum() # total number of valid rows
     split_index = np.searchsorted(np.cumsum(valid_rows), num_valid_training_rows) # searches for the index in (np.cumsum(pairs)) where the cumulative sum first exceeds or equals 50
-    # Leads to lower standard deviation of the mean squared error and mean absolute error (compared to split_index = int(0.7 * len(X)))
 
     # Skip if there are less than  valid row
     if total < valid_rows_threshold:
@@ -114,7 +110,7 @@ for idx, dataset in enumerate(dataset_list):
         mae_per_step = np.mean(np.abs(x_next - X_train[i+1]))
         mse_per_step_list.append(mse_per_step)
         mae_per_step_list.append(mae_per_step)
-
+    
     # Prediction loop for the testing data
     for i in range(len(X_test) -1):
         # Include NaN data in the training set so that ridge regression to disregard non valid rows
@@ -172,6 +168,12 @@ for idx, dataset in enumerate(dataset_list):
 
     num_interventions_train = U_train.sum()
     num_interventions_test = U_test.sum()
+
+    while len(mse_per_step_list) < max_len:
+        mse_per_step_list.append(np.nan)
+
+    while len(mae_per_step_list) < max_len:
+        mae_per_step_list.append(np.nan)    
 
     mse_per_step_overall_list.append(mse_per_step_list[:max_len])
     mae_per_step_overall_list.append(mae_per_step_list[:max_len])
@@ -260,17 +262,16 @@ df_mean_ema = pd.DataFrame({
 
 mse_per_step_overall_array = np.array(mse_per_step_overall_list)
 mae_per_step_overall_array = np.array(mae_per_step_overall_list)
-mse_per_step_overall_mean = np.mean(mse_per_step_overall_array, axis=0)
-mae_per_step_overall_mean = np.mean(mae_per_step_overall_array, axis=0)
+mse_per_step_overall_mean = np.nanmean(mse_per_step_overall_array, axis=0)
+mae_per_step_overall_mean = np.nanmean(mae_per_step_overall_array, axis=0)
 
 # Create a plot
-plt.plot(mse_per_step_overall_mean, linestyle='-', color='red', label='MSE')
 plt.plot(mae_per_step_overall_mean, linestyle='-', color='blue', label='MAE')
 
 # Add titles and labels
-plt.title("MSE and MAE per Step (Overall Mean)")
+plt.title("MAE per Step (Overall Mean)")
 plt.xlabel("Step")
-plt.ylabel("MSE")
+plt.ylabel("MAE")
 
 # Display the plot
 plt.show()
