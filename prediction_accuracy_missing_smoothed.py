@@ -13,10 +13,12 @@ dataset_list_smoothed = []
 emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed']
 emis = ['interactive1', 'interactive2', 'interactive3', 'interactive4', 'interactive5', 'interactive6', 'interactive7', 'interactive8']
 
-prep_data_folder = "prep_data"
-prep_data_folder_smoothed = "prep_data_smoothed"
-subfolders = ["MRT1","MRT2","MRT3"]
+data_folder = "data"
+subfolders = ["MRT1", "MRT2", "MRT3"]
+non_smoothed = "processed_csv_no_con"
+smoothed = "processed_csv_no_con_smoothed"
 files = []
+files_s = []
 
 # Set the threshold for missing data and the number of valid rows
 num_valid_training_rows = 50
@@ -24,8 +26,8 @@ valid_rows_threshold = 70
 max_len = 200
 
 for subfolder in subfolders:
-    folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
-    folder_path_smoothed = os.path.join(prep_data_folder_smoothed, subfolder, "*.csv")
+    folder_path = os.path.join(data_folder, subfolder, non_smoothed, "*.csv")
+    folder_path_smoothed = os.path.join(data_folder, subfolder, smoothed, "*.csv")
     for file in glob.glob(folder_path):
         df = pd.read_csv(file)
         data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
@@ -35,7 +37,13 @@ for subfolder in subfolders:
         df_s = pd.read_csv(file_s)
         data_s = utils.csv_to_dataset(file_s, emas, emis, invert_columns=[])
         dataset_list_smoothed.append(data_s)
+        files_s.append(file_s)
 
+filenames1 = {os.path.basename(f) for f in files}
+filenames2 = {os.path.basename(f) for f in files_s}
+if filenames1 != filenames2:
+    print('Dataset creation failed: Not the same files in both folders (prep_data and prep_data_smoothed)')
+    exit()
 
 def compute_max_len(files):
     max_len = 0
@@ -76,7 +84,7 @@ for idx, dataset in enumerate(dataset_list):
     mean_per_ema = np.nanmean(X, axis=0)
     mean_per_ema_list.append(mean_per_ema)
     
-    # Determine the split index for the training and testing data
+    # The split index could be different to the non-smoothed data, because the smoothed data has more valid rows -> not with X_s instead of X
     valid = ~np.isnan(X).any(axis=1)
     valid_rows = valid[:-1] & valid[1:] # valid rows are those where the predictor and target are both valid (no NaN values)
     total = valid_rows.sum() # total number of valid rows
@@ -89,8 +97,8 @@ for idx, dataset in enumerate(dataset_list):
     num_analysed_files += 1
     
     # Split data
-    X_train, X_test = X[:split_index], X[split_index:]
-    U_train, U_test = U[:split_index], U[split_index:]
+    X_test0, X_test = X[:split_index], X[split_index:] # X_test0 is the non smoothed training data
+    U_test0, U_test = U[:split_index], U[split_index:]
 
     X_train, X_train2 = X_s[:split_index], X_s[split_index:]
     U_train, U_train2 = U_s[:split_index], U_s[split_index:]
@@ -106,7 +114,7 @@ for idx, dataset in enumerate(dataset_list):
     mse_per_step_list = []
     mae_per_step_list = []
 
-    # Prediction loop for the training data
+    # Prediction loop for the training data (non-smoothed)
     for i in range(len(X_train) -1):
         # Skip if there is a NaN value in the training data in predictor or target
         if np.isnan(X_train[i]).any() or np.isnan(X_train[i + 1]).any():
@@ -280,7 +288,7 @@ mae_per_step_overall_mean = np.nanmean(mae_per_step_overall_array, axis=0)
 plt.plot(mae_per_step_overall_mean, linestyle='-', color='blue', label='MAE')
 
 # Add titles and labels
-plt.title("MAE per Step (Overall Mean)")
+plt.title("MAE per Step (Across datasets with >= 70 valid rows)")
 plt.xlabel("Step")
 plt.ylabel("MAE")
 

@@ -12,8 +12,8 @@ dataset_list = []
 emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed']
 emis = ['interactive1', 'interactive2', 'interactive3', 'interactive4', 'interactive5', 'interactive6', 'interactive7', 'interactive8']
 
-prep_data_folder = "prep_data"
-subfolders = ["MRT1","MRT2","MRT3"]
+data_folder = "data"
+subfolders = ["MRT1/processed_csv_no_con","MRT2/processed_csv_no_con","MRT3/processed_csv_no_con"]
 files = []
 
 # Set the threshold for missing data and the number of valid rows
@@ -22,7 +22,7 @@ valid_rows_threshold = 70
 max_len = 200
 
 for subfolder in subfolders:
-    folder_path = os.path.join(prep_data_folder, subfolder, "*.csv")
+    folder_path = os.path.join(data_folder, subfolder, "*.csv")
     for file in glob.glob(folder_path):
         df = pd.read_csv(file)
         data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
@@ -95,7 +95,7 @@ for idx, dataset in enumerate(dataset_list):
     mse_per_step_list = []
     mae_per_step_list = []
 
-    # Prediction loop for the training data
+    # Prediction loop for the training data 
     for i in range(len(X_train) -1):
         # Skip if there is a NaN value in the training data in predictor or target
         if np.isnan(X_train[i]).any() or np.isnan(X_train[i + 1]).any():
@@ -269,7 +269,7 @@ mae_per_step_overall_mean = np.nanmean(mae_per_step_overall_array, axis=0)
 plt.plot(mae_per_step_overall_mean, linestyle='-', color='blue', label='MAE')
 
 # Add titles and labels
-plt.title("MAE per Step (Overall Mean)")
+plt.title("MAE per Step (Across datasets with >= 70 valid rows)")
 plt.xlabel("Step")
 plt.ylabel("MAE")
 
