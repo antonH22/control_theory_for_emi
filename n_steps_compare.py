@@ -110,7 +110,7 @@ if __name__=='__main__':
     participants_MRT2 = extract_participant_ids(rnn_model_path_MRT2)
     participants_MRT3 = extract_participant_ids(rnn_model_path_MRT3)
 
-    step_by_step = True
+    step_by_step = False
     n_steps = 10
 
     mae_overall_list = []
