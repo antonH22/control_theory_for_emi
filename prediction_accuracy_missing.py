@@ -29,7 +29,6 @@ for subfolder in subfolders:
         dataset_list.append(data)
         files.append(file)
 
-
 def compute_max_len(files):
     max_len = 0
     max_file = ''
@@ -114,8 +113,8 @@ for idx, dataset in enumerate(dataset_list):
     # Prediction loop for the testing data
     for i in range(len(X_test) -1):
         # Include NaN data in the training set so that ridge regression to disregard non valid rows
-        X_train = np.append(X_train, X_test[i:i+1], axis=0)
-        U_train = np.append(U_train, U_test[i:i+1], axis=0)
+        X_train = np.append(X_train, X_test[i-1:i], axis=0)
+        U_train = np.append(U_train, U_test[i-1:i], axis=0)
         # Skip if there is a NaN value in the test data in predictor or target
         if np.isnan(X_test[i]).any() or np.isnan(X_test[i + 1]).any():
             continue

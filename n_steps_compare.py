@@ -41,6 +41,7 @@ def extract_participant_ids(folder_path):
 
 def model_prediction(now, dataset, step_by_step, n_steps, filename):
     mae_per_step_list = []
+    mae_per_step_n_list = []
     X, U = dataset['X'], dataset['Inp']
     # Split data
     X_train = X[:now]
@@ -51,51 +52,54 @@ def model_prediction(now, dataset, step_by_step, n_steps, filename):
     current_row = now
     predictions_list = []
 
-    x_next = X[now]
     for i in range(n_steps):
         if current_row >= len(X):
                 break
         if step_by_step:
             x_next = doc.step(A, B, X[current_row], U[current_row])
         else: 
+            if i == 0:
+                x_next = X[now]
             x_next = doc.step(A, B, x_next, U[current_row])
+
         predictions_list.append(x_next)
         current_row += 1
     
     predictions_np = np.array(predictions_list)
     # Compute the prediction error
     for i in range(len(X_validation)):
+        # Compute the MAE per time step nan values
+        mae_per_step_n = np.mean(np.abs(predictions_np[i] - X_validation[i]))
+        mae_per_step_n_list.append(mae_per_step_n)
         # Skip if there is a NaN value in the validation data
         if np.isnan(X_validation[i]).any():
             continue
-        prediction_np = predictions_np[i]
-        if np.isnan(prediction_np).any():
-            # Happens when doing step by step and current row is nan.
+        # Skip if there is a NaN value in the prediction (occurs when doing step by step and current row is nan.)
+        if np.isnan(predictions_np[i]).any():
             continue
-        target = X_validation[i]
-        mae_per_step = np.mean(np.abs(prediction_np - target))
+        mae_per_step = np.mean(np.abs(predictions_np[i] - X_validation[i]))
         if np.isnan(mae_per_step):
-            #print(filename)
-            #print("Mae ist nan")
-            a = []
+            print(filename)
+            print("Mae ist nan")
         else:
             mae_per_step_list.append(mae_per_step)
-    return mae_per_step_list
+    return mae_per_step_list, mae_per_step_n_list
 
 def prediction_errors_per_participant(participant_nr, rnn_model_path_MRT, data_path, step_by_step, n_steps):
-    # There is no prediction possible with the rnn
-    if participant_nr == 52:
-        return []
+    mae_n_complete_list = []
     mae_overall_list = []
+    
     csv_path, filename = get_csv_file_path(participant_nr, data_path)
     timesteps = extract_timesteps(filename, rnn_model_path_MRT)
     dataset = utils.csv_to_dataset(csv_path, emas, emis, invert_columns=[], remove_initial_nan=False)
 
     for now in timesteps:
-        mae_per_now = model_prediction(now, dataset, step_by_step, n_steps, filename)
+        mae_per_now, mae_per_n = model_prediction(now, dataset, step_by_step, n_steps, filename)
         mae_overall_list.extend(mae_per_now)
+        if len(mae_per_n) == n_steps:
+            mae_n_complete_list.append(mae_per_n)
 
-    return mae_overall_list
+    return mae_overall_list, mae_n_complete_list
 
 
 if __name__=='__main__':
@@ -114,15 +118,34 @@ if __name__=='__main__':
     n_steps = 10
 
     mae_overall_list = []
-    
+    mae_n_overall_list = []
     for participant in participants_MRT2:
-        mae_per_participant_list = prediction_errors_per_participant(participant, rnn_model_path_MRT2, data_folder_MRT2, step_by_step, n_steps)
+        if participant == 52 or participant == 64:
+            continue
+        mae_per_participant_list, mae_n_complete_list  = prediction_errors_per_participant(participant, rnn_model_path_MRT2, data_folder_MRT2, step_by_step, n_steps)
         mae_overall_list.extend(mae_per_participant_list)
+        mae_n_overall_list.extend(mae_n_complete_list)
     
     for participant in participants_MRT3:
-        mae_per_participant_list = prediction_errors_per_participant(participant, rnn_model_path_MRT3, data_folder_MRT3, step_by_step, n_steps)
+        if participant == 239:
+            continue
+        mae_per_participant_list, mae_n_complete_list = prediction_errors_per_participant(participant, rnn_model_path_MRT3, data_folder_MRT3, step_by_step, n_steps)
         mae_overall_list.extend(mae_per_participant_list)
+        mae_n_overall_list.extend(mae_n_complete_list)
 
+    print('Prediction errors LDS')
     print(f'Step-by-step = {step_by_step}')
     print(f'Number of valid predictions: {len(mae_overall_list)}')
-    print(f'MAE: {np.mean(mae_overall_list):.4f}')
+    print(f'MAE: {np.mean(mae_overall_list):.3f}')
+
+    mae_n_overall_array = np.array(mae_n_overall_list)
+    mae_n_overall_mean = np.nanmean(mae_n_overall_array, axis = 0)
+    print(f'Shape of lists : {mae_n_overall_array.shape}')
+    # Create a plot
+    plt.plot(mae_n_overall_mean, linestyle='-', color='blue', label='MAE')
+    # Add titles and labels
+    plt.title(f"MAE over {n_steps} steps (LDS)")
+    plt.xlabel("Step")
+    plt.ylabel("MAE")
+    # Display the plot
+    plt.show()

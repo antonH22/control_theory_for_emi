@@ -115,18 +115,18 @@ for idx, dataset in enumerate(dataset_list):
     mae_per_step_list = []
 
     # Prediction loop for the training data (non-smoothed)
-    for i in range(len(X_train) -1):
+    for i in range(len(X_test0) -1):
         # Skip if there is a NaN value in the training data in predictor or target
-        if np.isnan(X_train[i]).any() or np.isnan(X_train[i + 1]).any():
+        if np.isnan(X_test0[i]).any() or np.isnan(X_test0[i + 1]).any():
             continue
-        real_predictor_states.append(X_train[i])
-        real_target_states.append(X_train[i+1])
-        x_next = doc.step(A, B, X_train[i], U_train[i])
+        real_predictor_states.append(X_test0[i])
+        real_target_states.append(X_test0[i+1])
+        x_next = doc.step(A, B, X_test0[i], U_test0[i])
         predicted_states.append(x_next)
 
         # Compute the MSE and MAE per time step
-        mse_per_step = np.mean((x_next - X_train[i+1])**2)
-        mae_per_step = np.mean(np.abs(x_next - X_train[i+1]))
+        mse_per_step = np.mean((x_next - X_test0[i+1])**2)
+        mae_per_step = np.mean(np.abs(x_next - X_test0[i+1]))
         mse_per_step_list.append(mse_per_step)
         mae_per_step_list.append(mae_per_step)
     
@@ -288,7 +288,7 @@ mae_per_step_overall_mean = np.nanmean(mae_per_step_overall_array, axis=0)
 plt.plot(mae_per_step_overall_mean, linestyle='-', color='blue', label='MAE')
 
 # Add titles and labels
-plt.title("MAE per Step (Across datasets with >= 70 valid rows)")
+plt.title("MAE per Step with model trained on smoothed data and tested on real data (Across datasets with >= 70 valid rows)")
 plt.xlabel("Step")
 plt.ylabel("MAE")
 
