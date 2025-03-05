@@ -107,7 +107,7 @@ def generate_random_dataset(N: int, T: int, seed: int=None):
 
 ### Algebra utils
 
-def stable_ridge_regression(data, inputs, intercept=False, accepted_eigval_threshold=1, max_regularization=10.5):
+def stable_ridge_regression(data, inputs, intercept=False, accepted_eigval_threshold=0.999, max_regularization=10.5):
     ''' Performs ridge regression for model X[1:] = A@X[:-1] + B@Inp[:-1]. 
         Regularization lambda is chosen as small as possible such that A is stable.
         Returns A, B, lambda. If intercept, returns A, B, intercept, lambda. '''
@@ -300,15 +300,16 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
 
-def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=[], regularize=False):
+def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=[], regularize=False, remove_initial_nan = True):
     ''' Load a CSV file, adjust data and convert it to a datset (dictionary). '''
     csv_df = pd.read_csv(file_path)
     required_columns = state_columns + input_columns
     csv_df = csv_df[required_columns]
     
-    # Delete empty rows in the beginning
-    first_non_na_index = csv_df.notna().all(axis=1).idxmax()
-    csv_df = csv_df.iloc[first_non_na_index:].reset_index(drop=True)
+    if remove_initial_nan:
+        # Delete empty rows in the beginning
+        first_non_na_index = csv_df.notna().all(axis=1).idxmax()
+        csv_df = csv_df.iloc[first_non_na_index:].reset_index(drop=True)
     
     # Split into state and input variables (ndarrays)
     X = csv_df[state_columns].values
