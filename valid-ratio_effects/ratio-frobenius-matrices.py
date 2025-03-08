@@ -16,13 +16,15 @@ data_folder = "data"
 subfolders = ["MRT1/processed_csv_no_con","MRT2/processed_csv_no_con","MRT3/processed_csv_no_con"]
 
 # Set parameters
-split = 0.7
+split = 1.0
 num_rows_threshold = 50 # One file is excluded
 ratios = [0.8,0.7,0.6,0.5,0.4,0.3,0.2]
 num_resubsampling = 1 # Number of times the training set creation is repeated to reduce standard deviation caused by individual random removal process
 
-# Set the filename of the results
-filename = f'trainratio-frobeniusA{num_resubsampling}.csv'
+# Set the filenames of the results
+filename_A = f'completeratio-frobeniusAcompare{num_resubsampling}.csv'
+filename_K = f'completeratio-frobeniusKcompare{num_resubsampling}.csv'
+filename_AC = f'completeratio-frobeniusACcompare{num_resubsampling}.csv'
 
 def remove_one_valid_row(data, input):
     # Find indices of rows that do not contain NaN values and delete one randomly
@@ -63,13 +65,24 @@ def get_training_set(valid_train_ratio, target_ratio, X_train, U_train):
 def frobenius_norm(matrix):
     return np.sqrt(np.sum(np.abs(matrix) ** 2))
 
-def frobenius_norm_per_ratio(X_train_ratio, U_train_ratio):
+def norm_per_ratio(X_train_ratio, U_train_ratio):
     A, B, lmbda = utils.stable_ridge_regression(X_train_ratio, U_train_ratio)
     frobenius_norm_A = frobenius_norm(A)
-    return frobenius_norm_A
 
-# Dictionary to store ratios and corresponding frobenius norms
-results = {ratio: [] for ratio in ratios}
+    Q = np.eye(len(emas))
+    R = np.eye(len(emis))
+    # Compute the optimal gain matrix K
+    K = doc.kalman_gain(A, B, Q, R)
+    frobenius_norm_K = frobenius_norm(K)
+
+    ac_per_ema = doc.average_ctrb(A)
+    l2norm_AC = np.linalg.norm(ac_per_ema)
+    return frobenius_norm_A, frobenius_norm_K, l2norm_AC
+
+# Dictionaries to store ratios and corresponding frobenius norms
+results_A = {ratio: [] for ratio in ratios}
+results_K = {ratio: [] for ratio in ratios}
+results_AC = {ratio: [] for ratio in ratios}
 
 dataset_list = []
 files = []
@@ -120,48 +133,109 @@ for idx, dataset in enumerate(dataset_list):
                 break
             X_train_ratio, U_train_ratio = resulting_training_set
             current_ratio = get_valid_ratio(X_train_ratio)  # Update current_ratio
-            frobenius_norm_A = frobenius_norm_per_ratio(X_train_ratio, U_train_ratio)
+            frobenius_norm_A, frobenius_norm_K, l2_norm_AC = norm_per_ratio(X_train_ratio, U_train_ratio)
                 
         if resulting_training_set != False:
-            results[ratio].append(frobenius_norm_A)
-            print(f'Valid ratio: {ratio} real valid ratio {current_ratio}; Frobenius Norm: {frobenius_norm_A}')
+            results_A[ratio].append(frobenius_norm_A)
+            results_K[ratio].append(frobenius_norm_K)
+            results_AC[ratio].append(l2_norm_AC)
+            #print(f'Valid ratio: {ratio} real valid ratio {current_ratio}')
     
 
 # Compute mean and standard deviation for each ratio
-mean_norms = [np.mean(norms) for norms in results.values()]
-std_devs = [np.std(norms) for norms in results.values()]
-print(f'std_devs mean: {np.mean(std_devs)}')
+mean_norms_A = [np.mean(norms) for norms in results_A.values()]
+std_devs_A = [np.std(norms) for norms in results_A.values()]
+
+mean_norms_K = [np.mean(norms) for norms in results_K.values()]
+std_devs_K = [np.std(norms) for norms in results_K.values()]
+
+mean_norms_AC = [np.mean(norms) for norms in results_AC.values()]
+std_devs_AC = [np.std(norms) for norms in results_AC.values()]
 
 # Convert results to a DataFrame to save them to a csv file
-df_final = pd.DataFrame({
+folder = "results_ratio"
+df_A = pd.DataFrame({
     "ratio": ratios,
-    "mean_norms": mean_norms,
-    "std_dev": std_devs
+    "mean_norms": mean_norms_A,
+    "std_dev": std_devs_A
 })
+filepath = os.path.join(folder, filename_A)
+df_A.to_csv(filepath, index=False)
+print(f'Final results saved to {filename_A}')
 
+df_K = pd.DataFrame({
+    "ratio": ratios,
+    "mean_norms": mean_norms_K,
+    "std_dev": std_devs_K
+})
 # Save to CSV
-filepath = os.path.join("results_ratio", filename)
-df_final.to_csv(filepath, index=False)
-print(f'Final results saved to {filename}')
+filepath = os.path.join(folder, filename_K)
+df_K.to_csv(filepath, index=False)
+print(f'Final results saved to {filename_K}')
 
-num_elements = [len(errors) for errors in results.values()]
+df_AC = pd.DataFrame({
+    "ratio": ratios,
+    "mean_norms": mean_norms_AC,
+    "std_dev": std_devs_AC
+})
+# Save to CSV 
+filepath = os.path.join(folder, filename_AC)
+df_AC.to_csv(filepath, index=False)
+print(f'Final results saved to {filename_AC}')
+
+
+num_elements = [len(errors) for errors in results_A.values()]
 print(f'Datasets analysed {num_analysed_files}')
 for i,_ in enumerate(ratios):
     print(f'Number of samples for valid ratio {ratios[i]}: {num_elements[i]}')
 
 # Reverse the data
 ratios_reversed = ratios[::-1]
-mean_norms_reversed = mean_norms[::-1]
-std_devs_reversed = std_devs[::-1]
+mean_norms_reversed = mean_norms_A[::-1]
+std_devs_reversed = std_devs_A[::-1]
 
 # Create the plot
 plt.figure(figsize=(8, 6))
-plt.errorbar(ratios_reversed, mean_norms_reversed, yerr=std_devs_reversed, fmt='-o', capsize=5, label='Mean Error ± Std Dev')
+plt.errorbar(ratios_reversed, mean_norms_reversed, yerr=std_devs_reversed, fmt='-o', capsize=5, label='Frobenius A')
 
 # Customize the plot
-plt.title('Mean Error vs Ratio with Standard Deviation')
+plt.title('Frobenius A vs Ratio')
 plt.xlabel('Ratios')
-plt.ylabel('Mean Error')
+plt.ylabel('Frobenius')
+plt.grid(True)
+plt.legend()
+
+# Show the plot
+plt.show()
+
+mean_norms_reversed = mean_norms_K[::-1]
+std_devs_reversed = std_devs_K[::-1]
+
+# Create the plot
+plt.figure(figsize=(8, 6))
+plt.errorbar(ratios_reversed, mean_norms_reversed, yerr=std_devs_reversed, fmt='-o', capsize=5, label='Frobenius K')
+
+# Customize the plot
+plt.title('Frobenius K vs Ratio')
+plt.xlabel('Ratios')
+plt.ylabel('Frobenius')
+plt.grid(True)
+plt.legend()
+
+# Show the plot
+plt.show()
+
+mean_norms_reversed = mean_norms_AC[::-1]
+std_devs_reversed = std_devs_AC[::-1]
+
+# Create the plot
+plt.figure(figsize=(8, 6))
+plt.errorbar(ratios_reversed, mean_norms_reversed, yerr=std_devs_reversed, fmt='-o', capsize=5, label='Frobenius AC')
+
+# Customize the plot
+plt.title('Frobenius AC vs Ratio')
+plt.xlabel('Ratios')
+plt.ylabel('Frobenius')
 plt.grid(True)
 plt.legend()
 
