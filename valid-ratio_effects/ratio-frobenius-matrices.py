@@ -19,12 +19,12 @@ subfolders = ["MRT1/processed_csv_no_con","MRT2/processed_csv_no_con","MRT3/proc
 split = 1.0
 num_rows_threshold = 50 # One file is excluded
 ratios = [0.8,0.7,0.6,0.5,0.4,0.3,0.2]
-num_resubsampling = 1 # Number of times the training set creation is repeated to reduce standard deviation caused by individual random removal process
+num_resubsampling = 10 # Number of times the training set creation is repeated to reduce standard deviation caused by individual random removal process
 
 # Set the filenames of the results
-filename_A = f'completeratio-frobeniusAcompare{num_resubsampling}.csv'
-filename_K = f'completeratio-frobeniusKcompare{num_resubsampling}.csv'
-filename_AC = f'completeratio-frobeniusACcompare{num_resubsampling}.csv'
+filename_A = f'completeratio-frobeniusA{num_resubsampling}.csv'
+filename_K = f'completeratio-frobeniusK{num_resubsampling}.csv'
+filename_AC = f'completeratio-frobeniusAC{num_resubsampling}.csv'
 
 def remove_one_valid_row(data, input):
     # Find indices of rows that do not contain NaN values and delete one randomly

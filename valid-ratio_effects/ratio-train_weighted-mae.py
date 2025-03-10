@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 # - The number of participants with valid ratio >= 80% is only 18, should you use smoothed data?
 # - The ratio of valid rows in training data and testing data changes for different ratios
 
-# Error computation: Weighted mean error 
+# Error computation: Weighted mean error (to reduce the variance caused by datasets with few valid rows)
 # Problem: The participant have different influences on the error (less valid rows -> less influence)
 
 emas = ['EMA_mood', 'EMA_disappointed', 'EMA_scared', 'EMA_worry', 'EMA_down', 'EMA_sad', 'EMA_confidence', 'EMA_stress', 'EMA_lonely', 'EMA_energetic', 'EMA_concentration', 'EMA_resilience', 'EMA_tired', 'EMA_satisfied', 'EMA_relaxed']

@@ -19,8 +19,8 @@ subfolders = ["MRT1/processed_csv_no_con","MRT2/processed_csv_no_con","MRT3/proc
 split = 0.7
 num_rows_threshold = 50 # One file is excluded
 ratios = [0.8,0.7,0.6,0.5,0.4,0.3,0.2]
-num_resubsampling = 1 # Number of times the training set creation is repeated to reduce standard deviation caused by individual random removal process
-equal_influence_on_mean = False # If True, the for each ratio the mean error of the ratioed dataset is appended to the error list (from which the mean is taken)
+num_resubsampling = 50 # Number of times the training set creation is repeated to reduce standard deviation caused by individual random removal process
+equal_influence_on_mean = True # If True, the mean error of the ratioed dataset is appended to the error list (from which the mean is taken at the end)
 
 # Set the filename of the results
 filename = f'trainratio-mae_{equal_influence_on_mean}{num_resubsampling}.csv'
@@ -142,7 +142,7 @@ for idx, dataset in enumerate(dataset_list):
                 results[ratio].extend(mae_per_step_overall_mean)
             else:
                 results[ratio].extend(mae_per_step_overall_list)
-            print(f'Valid ratio: {ratio} real valid ratio {current_ratio}; MAE: {np.mean(mae_per_step_overall_list)}')
+            #print(f'Valid ratio: {ratio} real valid ratio {current_ratio}; MAE: {np.mean(mae_per_step_overall_list)}')
     
 
 # Compute mean and standard deviation for each ratio
@@ -157,7 +157,7 @@ df_final = pd.DataFrame({
     "std_dev": std_errors
 })
 # Save to CSV
-filepath = os.path.join("results_ratio-mae", filename)
+filepath = os.path.join("results_ratio", filename)
 df_final.to_csv(filepath, index=False)
 print(f'Final results saved to {filename}')
 
