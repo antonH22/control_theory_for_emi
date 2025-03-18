@@ -5,14 +5,14 @@ import numpy as np
 import pandas as pd
 import myplots
 
-filename = "trainratio-mae_True10.csv"
+filename = "trainlen_frobenius_AC.csv"
 
-filepath = os.path.join("results_ratio", filename)
+filepath = os.path.join("results_trainlen", filename)
 df = pd.read_csv(filepath)
 # Extract values
 ratios = df.iloc[:, 0]
 y_values = df.iloc[:, 1]
-std_devs = df.iloc[:, 2]
+std_errs = df["se"]
 """
 num_elements = df.iloc[:, 3] 
 
@@ -24,9 +24,14 @@ for i,_ in enumerate(ratios):
 # Reverse the data (to plot from 20% to 80%)
 ratios_reversed = ratios[::-1]
 y_values_reversed = y_values[::-1]
-std_devs_reversed = std_devs[::-1]
+std_errs_reversed = std_errs[::-1]
 
 # Use my plotting functions
-#save_path = os.path.splitext(filepath)[0] + "_plot2.png"
-save_path = None
-myplots.myplot_bar(ratios_reversed, y_values_reversed, std_devs_reversed, xlabel='Train Set Length', ylabel='Frobenius K', legend_label=None, save_path=save_path)
+save_path = os.path.splitext(filepath)[0] + "_logplot.png"
+#save_path = None
+legend_label = 'L2 Norm AC'
+xlabel='Training Set Length'
+ylabel='L2 Norm AC'
+title=f'{xlabel} vs. {ylabel}'
+log_scale = True
+myplots.myplot_bar(ratios_reversed, y_values_reversed, std_errs_reversed, log_scale=log_scale, xlabel=xlabel, ylabel=ylabel, title=title, legend_label=legend_label, save_path=save_path)
