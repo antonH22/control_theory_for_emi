@@ -1,5 +1,6 @@
 import itertools as it
 import os
+import glob
 import warnings
 from typing import List, Optional
 
@@ -300,8 +301,8 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
 
-def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=[], regularize=False, remove_initial_nan = True):
-    ''' Load a CSV file, adjust data and convert it to a datset (dictionary). '''
+def csv_to_dataset(file_path, state_columns, input_columns, centered=True, remove_initial_nan=True, exclude_constant_columns=False, invert_columns=[]):
+    " Load a CSV file, adjust data and convert it to a datset (dictionary). "
     csv_df = pd.read_csv(file_path)
     required_columns = state_columns + input_columns
     csv_df = csv_df[required_columns]
@@ -315,9 +316,23 @@ def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=[], r
     X = csv_df[state_columns].values
     Inp = csv_df[input_columns].values
 
-    # Regularize state variables to [-3, 3]
-    if regularize:
+    # Center state variables to [-3, 3]
+    if centered:
         X -= 4
+
+    # Exclude constant columns in state_columns if specified
+    if exclude_constant_columns:
+        # Identify constant columns in state_columns
+        constant_columns = [col for col in state_columns if csv_df[col].nunique(dropna=True) == 1]
+        
+        if constant_columns:
+            # Drop constant columns from the DataFrame
+            csv_df = csv_df.drop(columns=constant_columns)
+            state_columns = [col for col in state_columns if col not in constant_columns]
+            if state_columns:
+                X = csv_df[state_columns].values
+            else:
+                return {'X': [], 'Inp': Inp}
     
     # Invert columns if necessary
     for column in invert_columns:
@@ -327,9 +342,20 @@ def csv_to_dataset(file_path, state_columns, input_columns, invert_columns=[], r
     # Return the dataset as a dictionary
     return {'X': X, 'Inp': Inp}
 
+def load_dataset(data_folder, subfolders, state_columns, input_columns, centered=True, remove_initial_nan=True, exclude_constant_columns=False, invert_columns=[]):
+    "Load all CSV files from the given subfolders and return dataset list and filenames."
+    dataset_list = []
+    files = []
+    for subfolder in subfolders:
+        folder_path = os.path.join(data_folder, subfolder, "*.csv")
+        for file in glob.glob(folder_path):
+            data = csv_to_dataset(file, state_columns, input_columns, centered=centered, remove_initial_nan=remove_initial_nan, exclude_constant_columns=exclude_constant_columns, invert_columns=invert_columns)
+            dataset_list.append(data)
+            files.append(file)
+    return dataset_list, files
 
 def dataset_to_csv(dataset, state_columns, input_columns, output_file):
-    '''' Convert a dataset (dictionary) back to a CSV file. '''
+    " Convert a dataset (dictionary) back to a CSV file. "
     # Extract the state and input matrices from the dataset
     X = dataset['X']
     Inp = dataset['Inp']

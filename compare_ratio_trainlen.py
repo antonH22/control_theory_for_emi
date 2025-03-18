@@ -47,6 +47,12 @@ def extract_participant_ids(folder_path):
     
     return sorted(participant_ids)
 
+def locf(X_train): 
+    df_helper_locf = pd.DataFrame(X_train).copy()
+    df_helper_locf.ffill(inplace=True)
+    X_train_locf = df_helper_locf.to_numpy()
+    return X_train_locf
+
 def model_prediction(now, dataset, step_by_step, n_steps, filename):
     mae_per_step_list = []
     mae_per_step_n_list = []
@@ -54,9 +60,10 @@ def model_prediction(now, dataset, step_by_step, n_steps, filename):
     # Split data
     X_train = X[:now]
     U_train = U[:now]
+    X_train_locf = locf(X_train)
     X_validation = X[now+1:now+n_steps+1]
     
-    A, B, lmbda = utils.stable_ridge_regression(X_train, U_train)
+    A, B, lmbda = utils.stable_ridge_regression(X_train_locf, U_train)
     current_row = now
     predictions_list = []
 
@@ -100,14 +107,18 @@ def prediction_errors_per_participant(participant_nr, rnn_model_path_MRT, data_p
     
     csv_path, filename = get_csv_file_path(participant_nr, data_path)
     timesteps = extract_timesteps(filename, rnn_model_path_MRT)
-    dataset = utils.csv_to_dataset(csv_path, emas, emis, invert_columns=[], remove_initial_nan=False)
+    dataset = utils.csv_to_dataset(csv_path, emas, emis, centered=True, invert_columns=[], exclude_constant_columns=False, remove_initial_nan=False)
 
     for now in timesteps:
         mae_per_now, _ = model_prediction(now, dataset, step_by_step, n_steps, filename)
-        mae_overall_list.extend(mae_per_now)
-        now_list.extend([now] * len(mae_per_now))
-        ratio = get_valid_ratio(dataset, now)
-        ratio_list.extend([ratio]*len(mae_per_now))
+        if mae_per_now != []:
+            mae_overall_list.append(sum(mae_per_now)/len(mae_per_now))
+            #mae_overall_list.extend(mae_per_now)
+            now_list.append(now)
+            #now_list.extend([now] * len(mae_per_now))
+            ratio = get_valid_ratio(dataset, now)
+            #ratio_list.extend([ratio]*len(mae_per_now))
+            ratio_list.append(ratio)
 
     return mae_overall_list, now_list, ratio_list
 
@@ -128,7 +139,7 @@ if __name__=='__main__':
     participants_MRT2 = extract_participant_ids(rnn_model_path_MRT2)
     participants_MRT3 = extract_participant_ids(rnn_model_path_MRT3)
 
-    step_by_step = True
+    step_by_step = False
     n_steps = 10
 
     mae_per_participant = []
@@ -137,7 +148,6 @@ if __name__=='__main__':
     for participant in participants_MRT1:
         if participant == 52:
             continue
-        print(f'Participant: {participant}')
         mae_per_participant_list, train_set_length_list, valid_ratio_list  = prediction_errors_per_participant(participant, rnn_model_path_MRT1, data_folder_MRT1, step_by_step, n_steps)
         mae_per_participant.extend(mae_per_participant_list)
         valid_ratio_per_participant.extend(valid_ratio_list)
@@ -166,7 +176,7 @@ if __name__=='__main__':
         "errors": mae_per_participant,
     })
     # Save to CSV
-    filename = "ratio_trainlen_mae_LDS.csv"
+    filename = f'ratio_trainlen_mae_LDS_n{n_steps}contin_mean.csv'
     filepath = os.path.join("results_ratio_trainlen_compare", filename)
     df_final.to_csv(filepath, index=False)
     print(f'Final results saved to {filename}')

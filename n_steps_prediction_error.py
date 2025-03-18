@@ -28,7 +28,7 @@ n_steps = 10
 for subfolder in subfolders:
     folder_path = os.path.join(data_folder, subfolder, "*.csv")
     for file in glob.glob(folder_path):
-        data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
+        data = utils.csv_to_dataset(file, emas, emis)
         dataset_list.append(data)
         files.append(file)
 

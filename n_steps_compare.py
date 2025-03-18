@@ -91,7 +91,7 @@ def prediction_errors_per_participant(participant_nr, rnn_model_path_MRT, data_p
     
     csv_path, filename = get_csv_file_path(participant_nr, data_path)
     timesteps = extract_timesteps(filename, rnn_model_path_MRT)
-    dataset = utils.csv_to_dataset(csv_path, emas, emis, invert_columns=[], remove_initial_nan=False)
+    dataset = utils.csv_to_dataset(csv_path, emas, emis)
 
     for now in timesteps:
         mae_per_now, mae_per_n = model_prediction(now, dataset, step_by_step, n_steps, filename)

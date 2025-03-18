@@ -20,12 +20,12 @@ data_folder = "data"
 subfolders = ["MRT1/processed_csv_no_con","MRT2/processed_csv_no_con","MRT3/processed_csv_no_con"]
 
 # Set parameters
-split = 0.7
+split = 0.7 # Not on basis of the valid ratio, but total length (different from the ratio analysis scripts)
 num_rows_threshold = 50 # One file is excluded
-trainlens = [120,110,100,90,80,70,60,50,40,30,20]
+trainlens = [160,140,120,100,80,60,40,20]
 
 # Set the filename of the results
-filename = f'trainlen-mae_new.csv'
+filename = f'trainlen-mae.csv'
 
 def get_training_set(trainlen, X_train, U_train):
     number_to_remove = len(X_train) - trainlen
@@ -35,7 +35,14 @@ def get_training_set(trainlen, X_train, U_train):
     U_train_new = U_train[number_to_remove:]
     return X_train_new, U_train_new
 
+def locf(X_train): 
+    df_helper_locf = pd.DataFrame(X_train).copy()
+    df_helper_locf.ffill(inplace=True)
+    X_train_locf = df_helper_locf.to_numpy()
+    return X_train_locf
+
 def prediction_error(X_train_trainlen, U_train_trainlen, X_test, U_test):
+    X_train_trainlen = locf(X_train_trainlen)
     A, B, lmbda = utils.stable_ridge_regression(X_train_trainlen, U_train_trainlen)
     mae_per_step_list = []
     
@@ -51,15 +58,7 @@ def prediction_error(X_train_trainlen, U_train_trainlen, X_test, U_test):
 # Dictionary to store train set length and corresponding errors
 results = {trainlens: [] for trainlens in trainlens}
 
-dataset_list = []
-files = []
-for subfolder in subfolders:
-    folder_path = os.path.join(data_folder, subfolder, "*.csv")
-    for file in glob.glob(folder_path):
-        df = pd.read_csv(file)
-        data = utils.csv_to_dataset(file, emas, emis, invert_columns=[])
-        dataset_list.append(data)
-        files.append(file)
+dataset_list, files = utils.load_dataset(data_folder, subfolders, emas, emis, centered=True)
 
 skip_files = {}
 num_analysed_files = 0
@@ -72,20 +71,20 @@ for idx, dataset in enumerate(dataset_list):
         continue
     
     # Determine the split index for the training and testing data
-    valid = ~np.isnan(X).any(axis=1)
-    valid_rows = valid[:-1] & valid[1:] # valid rows are those where the predictor and target are both valid (no NaN values)
-    total = valid_rows.sum() # total number of valid rows
-    split_index = np.searchsorted(np.cumsum(valid_rows), total * split) # searches for the index in (np.cumsum(pairs)) where the cumulative sum first exceeds 70% of the valid rows
+    split_index = int(np.floor(len(X) * 0.7))
 
     num_analysed_files += 1
     print(f'Loop {num_analysed_files}/176')
     #print('-' * 40)
-    #print(f'{files[idx]}:')
+    print(f'{files[idx]}:')
     #print(f'Split index: {split_index}')
     
     # Split data
     X_train, X_test = X[:split_index], X[split_index:]
     U_train, U_test = U[:split_index], U[split_index:]
+
+    if len(X_train) < trainlens[0]:
+        continue
 
     for trainlen in trainlens:
         if len(X_train) < trainlen:
@@ -105,26 +104,26 @@ for idx, dataset in enumerate(dataset_list):
             results[trainlen].append(mean_error)  # Store size info
             print(f'Valid trainlen: {trainlen}, real trainlen {len(X_train_trainlen)}; MAE: {mean_error}')
 
-# Compute mean and standard deviation for each ratio
-mean_errors = [np.mean(errors) for errors in results.values()]
-std_devs = [np.std(errors) for errors in results.values()]
-print(f'std_errors mean: {np.mean(std_devs)}')
+# Compute mean, standard deviation, standard errors for each ratio
+def compute_me_sd_se(results_dict):
+    mean_errors = [np.mean(errors) for errors in results_dict.values()]
+    sd_errors = [np.std(errors) for errors in results_dict.values()]
+    # Compute std error
+    num_elements = [len(errors) for errors in results_dict.values()]
+    se_errors = [0] * len(trainlens)  # Initialize se_errors as a list of zeros
+    for i,_ in enumerate(trainlens):
+        print(f'Number of samples for valid ratio {trainlens[i]}: {num_elements[i]}')
+        se_errors[i] = sd_errors[i] / np.sqrt(num_elements[i])
+    return mean_errors, sd_errors, se_errors
 
-num_elements = [len(errors) for errors in results.values()]
-print(f'Datasets analysed {num_analysed_files}')
-for i,_ in enumerate(trainlens):
-    print(f'Number of prediction errors for {trainlens[i]}: {num_elements[i]}')
-
-num_elements = [len(errors) for errors in results.values()]
-for i,_ in enumerate(trainlens):
-    print(f'Number of mean values for trainlen {trainlens[i]}: {num_elements[i]}')
+mean_errors, sd_errors, se_errors = compute_me_sd_se(results)
 
 # Convert results to a DataFrame to save them to a csv file
 df_final = pd.DataFrame({
     "trainlen": trainlens,
     "mean_error": mean_errors,
-    "std_dev": std_devs,
-    "num_elements": num_elements
+    "std_dev": sd_errors,
+    "std_error": se_errors
 })
 # Save to CSV
 filepath = os.path.join("results_trainlen", filename)
@@ -134,11 +133,11 @@ print(f'Final results saved to {filename}')
 # Reverse the data
 trainlens_reversed = trainlens[::-1]
 mean_errors_reversed = mean_errors[::-1]
-std_devs_reversed = std_devs[::-1]
+std_errs_reversed = se_errors[::-1]
 
 # Create the plot
 plt.figure(figsize=(8, 6))
-plt.errorbar(trainlens_reversed, mean_errors_reversed, yerr=std_devs_reversed, fmt='-o', capsize=5, label='Mean Error ± Std Dev')
+plt.errorbar(trainlens_reversed, mean_errors_reversed, yerr=std_errs_reversed, fmt='-o', capsize=5, label='Mean Error ± Std Dev')
 
 # Customize the plot
 plt.title('Mean Error vs Ratio with Standard Deviation')

@@ -17,8 +17,8 @@ files = []
 
 # Last Observation Carried Forward (LOCF) method for handling missing data
 def locf(X_train): 
-    df_helper_locf = pd.DataFrame(X_train)
-    df_helper_locf.fillna(method='ffill', inplace=True)
+    df_helper_locf = pd.DataFrame(X_train).copy()
+    df_helper_locf.ffill(inplace=True)
     X_train_locf = df_helper_locf.to_numpy()
     return X_train_locf
 
@@ -70,6 +70,9 @@ for idx, dataset in enumerate(dataset_list):
     # Split data
     X_train, X_test = X[:split_index], X[split_index:]
     U_train, U_test = U[:split_index], U[split_index:]
+
+    # Set U_test to 0 array to see if that effects the error
+    #U_test = np.zeros_like(U_test)
 
     # Handle missing data using Last Observation Carried Forward (LOCF) method
     X_train = locf(X_train)
