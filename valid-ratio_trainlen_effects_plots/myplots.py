@@ -15,7 +15,7 @@ def myplot_bar(x_values, y_values, yerr=None, color='b', log_scale=False, xlabel
     plt.figure(figsize=figsize)
     plt.style.use(style)  # Apply the style sheet
     plt.plot(x_values, y_values, color=color, marker=marker, markersize=markersize,linewidth=2, label=legend_label)
-    plt.errorbar(x_values, y_values, yerr=yerr, label='SEM', fmt='none', color=color, capsize=capsize, elinewidth=1.5, capthick=1.5, alpha=0.3)  # Make error bars less visible
+    plt.errorbar(x_values, y_values, yerr=yerr, label=None, fmt='none', color=color, capsize=capsize, elinewidth=1.5, capthick=1.5, alpha=0.3)  # Make error bars less visible
     
     #Customize the plot
     plt.xlabel(xlabel)
@@ -35,15 +35,16 @@ def myplot_bar(x_values, y_values, yerr=None, color='b', log_scale=False, xlabel
 def myplot_bar_multiple(x_lists, y_lists, yerr_lists, colors, log_scale=False, xlabel='X-Axis', ylabel='Y-Axis', title=None, legend_labels=None, save_path=None):
     style = 'fivethirtyeight'
     figsize = (8, 6)
+    edgecolors= 'k'
     
     plt.figure(figsize=figsize)
     plt.style.use(style)  # Apply the style sheet
 
     # Plot each set of x and y values with corresponding color
     for i in range(len(x_lists)):
-        plt.plot(x_lists[i], y_lists[i], color=colors[i], marker='o', markersize=12, linewidth=2, label=legend_labels[i] if legend_labels else None)
-        if i < len(y_lists) and len(y_lists[i]) > 0:
-            plt.errorbar(x_lists[i], y_lists[i], yerr_lists[i], fmt='none', color=colors[i], capsize=10, elinewidth=1, capthick=3, alpha=0.5)  # Customize error bars
+        plt.scatter(x_lists[i], y_lists[i], color=colors[i], marker='o', s=100, zorder=3, edgecolors=edgecolors, label=legend_labels[i] if legend_labels else None)
+        plt.plot(x_lists[i], y_lists[i], c=colors[i], alpha=0.5, linewidth=5) 
+        plt.errorbar(x_lists[i], y_lists[i], yerr_lists[i], fmt='none', color=colors[i], capsize=10, elinewidth=3, capthick=2, alpha=1)  # Customize error bars
 
     # Customize the plot
     plt.xlabel(xlabel)
@@ -136,7 +137,7 @@ def myplot_scatter_compare(x_lists, y_lists, colors, colors_rm, markersize=20, a
     plt.show()
 
 # Plot the scatter plot
-def myplot_scatter_compare_participants(x_lists, y_lists, colors, mean=None, std_error=None, markersize=40, alpha=1, xlabel='X-Axis', ylabel='Y-Axis', title=None, legend_labels=None, window_size=None, save_path=None):
+def myplot_scatter_compare_participants(x_lists, y_lists, colors, mean=None, std_error=None, markersize=40, alpha=1, xlabel='X-Axis', ylabel='Y-Axis', errorlabel="Mean ± SEM", title=None, legend_labels=None, log_scale=False, save_path=None):
     style = 'fivethirtyeight'
     figsize = (12, 6)
     edgecolors= 'k'
@@ -152,8 +153,8 @@ def myplot_scatter_compare_participants(x_lists, y_lists, colors, mean=None, std
     ratios = x_lists[0]
     ratios_reversed = ratios[::-1]
     # Plot mean and std deviation
-    if mean is not None and std_error is not None:
-        plt.errorbar(ratios_reversed, mean, yerr=std_error, fmt='o-', color='black', label="Mean ± SEM", capsize=5, elinewidth=1.5, capthick=1.5, alpha=0.7)
+    if mean is not None:
+        plt.errorbar(ratios_reversed, mean, yerr=std_error, fmt='o-', color='black', label=errorlabel, capsize=5, elinewidth=1.5, capthick=1.5, alpha=0.7)
     
     # Labels and title
     plt.xlabel(xlabel)
@@ -166,6 +167,9 @@ def myplot_scatter_compare_participants(x_lists, y_lists, colors, mean=None, std
         plt.legend(title='Participants', bbox_to_anchor=(1.05, 1), loc='upper left')
     
     plt.grid(True)
+
+    if log_scale:
+        plt.yscale('log')
     
     # Save the plot if save_path is provided
     plt.tight_layout()
