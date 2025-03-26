@@ -24,11 +24,12 @@ subfolders = ["MRT1/processed_csv_no_con","MRT2/processed_csv_no_con","MRT3/proc
 
 num_rows_threshold = 50 # One file is excluded
 
-n_steps = 10
+n_steps = [1,2,3,4,5,6,7,8,9,10,11,12]
 brute_force_time_horizon = 5
 rho = 1
 
 dataset_list, files = utils.load_dataset(data_folder, subfolders, emas, emis, centered=False, exclude_constant_columns=True)
+dataset_list_rnn, _ = utils.load_dataset(data_folder, subfolders, emas, emis, centered=False, exclude_constant_columns=False)
 
 def locf(X_train): 
     df_helper_locf = pd.DataFrame(X_train).copy()
@@ -36,13 +37,20 @@ def locf(X_train):
     X_train_locf = df_helper_locf.to_numpy()
     return X_train_locf
 
-def compute_real_wellbeing_change(data, index, n_steps):
+def compute_real_future_mean(data, index, n_steps):
     future_steps = data[index + 1 : index + n_steps + 1]
     if index + n_steps >= data.shape[0] or np.isnan(future_steps).all():
         return False
     future_mean = np.nanmean(future_steps, axis=0)
-    wellbeing_change = future_mean - data[index]
-    return wellbeing_change
+    return future_mean
+
+def compute_predictions_mean(predictions, constant_columns):
+    if constant_columns:
+        # Exclude constant columns
+        filtered_predictions = np.delete(predictions, constant_columns, axis=1)
+        return np.mean(filtered_predictions, axis=0)
+    else:
+        return np.mean(predictions, axis=0)
 
 def predict_n_steps_lds(locf_X, U, index, control_input, n_steps):
     A, B, lmbda = utils.stable_ridge_regression(locf_X, U)
@@ -114,19 +122,27 @@ def mean_and_standard_error(data):
     return mean_value, standard_error
 
 filenames = []
-overall_real_wellbeing_change = []
-overall_wellbeing_change_opt_ctrl = []
-overall_wellbeing_change_brute_force = []
-overall_wellbeing_change_max_ac = []
+overall_wellbeing_change_opt_ctrl = {step: [] for step in n_steps}
+overall_wellbeing_change_brute_force = {step: [] for step in n_steps}
+overall_wellbeing_change_max_ac = {step: [] for step in n_steps}
+
 
 count_nan = 0
-for idx, dataset in enumerate(dataset_list):
+
+for idx, (dataset, dataset_rnn) in enumerate(zip(dataset_list, dataset_list_rnn)):
     model_path_rnn = find_model_path(files[idx])
-    if model_path_rnn == False:
-        continue
 
     X, U = dataset['X'], dataset['Inp']
+    X_rnn = dataset_rnn['X']
+    
     if len(X) < num_rows_threshold:
+        continue
+
+    
+    print(files[idx])
+    if model_path_rnn == False:
+        print('Failed to get model path')
+        print()
         continue
     
     n_items = X.shape[1]
@@ -135,81 +151,100 @@ for idx, dataset in enumerate(dataset_list):
     admissible_inputs = np.eye(n_inputs)
 
     input_rows_indices = np.where(~np.all(U == 0, axis=1))[0].tolist()
-    print(files[idx])
 
-    real_wellbeing_changes = []
-    wellbeing_changes_opt_ctrl = []
-    wellbeing_changes_brute_force = []
-    wellbeing_changes_max_ac = []
+    real_future_means = {step: [] for step in n_steps}
+    predicted_means_opt_ctrl = {step: [] for step in n_steps}
+    predicted_means_brute_force = {step: [] for step in n_steps}
+    predicted_means_max_ac = {step: [] for step in n_steps}
+
+
     for index in input_rows_indices:
         if index < 20:
             continue
-        row_with_intervention = X[index]
-        if np.isnan(row_with_intervention).all():
-            continue
-        real_wellbeing_change = compute_real_wellbeing_change(X, index, n_steps)
-        if real_wellbeing_change is False:
-            continue  # Skip this index if compute real wellbeing change failed
-        real_wellbeing_changes.append(real_wellbeing_change)
-        
+
         locf_X = locf(X)
+        locf_X_rnn = locf(X_rnn)
+
+        constant_columns = [i for i in range(locf_X_rnn.shape[1]) if np.unique(locf_X_rnn[:, i]).size == 1]
 
         input_opt_ctrl = strats.optimal_control_strategy(locf_X, U, target_state, admissible_inputs, rho, online=True)
-        predictions_opt_ctrl = predict_n_steps_rnn(locf_X, U, index, input_opt_ctrl, n_steps, model_path_rnn)
-        predicted_wellbeing_change_opt_ctrl = np.mean(predictions_opt_ctrl, axis=0) - row_with_intervention
-        wellbeing_changes_opt_ctrl.append(predicted_wellbeing_change_opt_ctrl)
-
         input_brute_force = strats.brute_force_strategy(locf_X, U, target_state, admissible_inputs, brute_force_time_horizon, rho, online=True)
-        predictions_brute_force = predict_n_steps_rnn(locf_X, U, index, input_brute_force, n_steps, model_path_rnn)
-        predicted_wellbeing_change_brute_force = np.mean(predictions_brute_force, axis=0) - row_with_intervention
-        wellbeing_changes_brute_force.append(predicted_wellbeing_change_brute_force)
-
         input_max_ac = strats.max_ac_strategy(locf_X, U, admissible_inputs, online=True)
-        predictions_max_ac = predict_n_steps_rnn(locf_X, U, index, input_max_ac, n_steps, model_path_rnn)
-        predicted_wellbeing_change_max_ac = np.mean(predictions_max_ac, axis=0) - row_with_intervention
-        wellbeing_changes_max_ac.append(predicted_wellbeing_change_max_ac)
 
+        for step in n_steps:
+            real_future_mean = compute_real_future_mean(X_rnn, index, step)
+            if real_future_mean is False:
+                continue
+            real_future_means[step].append(real_future_mean)
 
-    real_wellbeings_changes_array = np.array(real_wellbeing_changes)
-    real_wellbeing_changes_mean = np.mean(real_wellbeings_changes_array)
+            predictions_opt_ctrl = predict_n_steps_rnn(locf_X_rnn, U, index, input_opt_ctrl, step, model_path_rnn)
+            predicted_means_opt_ctrl[step].append(compute_predictions_mean(predictions_opt_ctrl, constant_columns))
 
-    wellbeing_changes_opt_ctrl_array = np.array(wellbeing_changes_opt_ctrl)
-    wellbeing_changes_opt_ctrl_mean = np.mean(wellbeing_changes_opt_ctrl_array)
+            predictions_brute_force = predict_n_steps_rnn(locf_X_rnn, U, index, input_brute_force, step, model_path_rnn)
+            predicted_means_brute_force[step].append(compute_predictions_mean(predictions_brute_force, constant_columns))
 
-    wellbeing_changes_brute_force_array = np.array(wellbeing_changes_brute_force)
-    wellbeing_changes_brute_force_mean = np.mean(wellbeing_changes_brute_force_array)
+            predictions_max_ac = predict_n_steps_rnn(locf_X_rnn, U, index, input_max_ac, step, model_path_rnn)
+            predicted_means_max_ac[step].append(compute_predictions_mean(predictions_max_ac, constant_columns))
 
-    wellbeing_changes_max_ac_array = np.array(wellbeing_changes_max_ac)
-    wellbeing_changes_max_ac_mean = np.mean(wellbeing_changes_max_ac_array)
-    
-    difference_wellbeing_opt_ctrl = wellbeing_changes_opt_ctrl_mean - real_wellbeing_changes_mean
-    difference_wellbeing_brute_force = wellbeing_changes_brute_force_mean - real_wellbeing_changes_mean
-    difference_wellbeing_max_ac = wellbeing_changes_max_ac_mean - real_wellbeing_changes_mean
-    print(f'opt_ctrl difference: {difference_wellbeing_opt_ctrl}')
-    print(f'brute_force difference: {difference_wellbeing_brute_force}')
-    print(f'max_ac difference: {difference_wellbeing_max_ac}')
-    print()
-    if np.isnan(difference_wellbeing_opt_ctrl):
-        count_nan +=1
-        continue
+    for step in n_steps:
+        if not real_future_means[step]:  # Skip if no data collected
+            continue
+        
+        real_mean = np.mean(real_future_means[step])
+        predicted_opt_ctrl_mean = np.mean(predicted_means_opt_ctrl[step])
+        predicted_brute_force_mean = np.mean(predicted_means_brute_force[step])
+        predicted_max_ac_mean = np.mean(predicted_means_max_ac[step])
 
-    filenames.append(files[idx])
-    print(f'Loop {len(filenames)}')
-    overall_wellbeing_change_opt_ctrl.append(difference_wellbeing_opt_ctrl)
-    overall_wellbeing_change_brute_force.append(difference_wellbeing_brute_force)
-    overall_wellbeing_change_max_ac.append(difference_wellbeing_max_ac)
+        difference_wellbeing_opt_ctrl = predicted_opt_ctrl_mean - real_mean
+        difference_wellbeing_brute_force = predicted_brute_force_mean - real_mean
+        difference_wellbeing_max_ac = predicted_max_ac_mean - real_mean
+
+        print(f'Prediction Length (step): {step}')
+        print(f'constant columns: {constant_columns}')
+        print(f'opt_ctrl difference: {difference_wellbeing_opt_ctrl}')
+        print(f'brute_force difference: {difference_wellbeing_brute_force}')
+        print(f'max_ac difference: {difference_wellbeing_max_ac}')
+        print()
+
+        if np.isnan(difference_wellbeing_opt_ctrl):
+            count_nan += 1
+            continue
+
+        if step == 1:  # Store filenames only once per dataset
+            filenames.append(files[idx])
+
+        overall_wellbeing_change_opt_ctrl[step].append(difference_wellbeing_opt_ctrl)
+        overall_wellbeing_change_brute_force[step].append(difference_wellbeing_brute_force)
+        overall_wellbeing_change_max_ac[step].append(difference_wellbeing_max_ac)
+    print(40*"-")
 
 extracted_filenames = []
 for file in filenames:
-    # Extract the required part (e.g. MRT1-11228_28)
     mrt_number = file.split('\\')[1].split('/')[0]
     file_name = os.path.basename(file).split('.')[0] 
     extracted_part = f"{mrt_number}-{file_name}"
     extracted_filenames.append(extracted_part)
 
-print("--------------------------------------")
 print(f'nan count = {count_nan}')
 
-df_results = pd.DataFrame({"optimal control": overall_wellbeing_change_opt_ctrl, "brute force": overall_wellbeing_change_brute_force, "max ac":overall_wellbeing_change_max_ac, "file": extracted_filenames})
-filepath1 = os.path.join("results_control_strategies", "results_rnn.csv")
+# Convert results into DataFrame format
+data = {"file": extracted_filenames}
+for step in n_steps:
+    data[f"optimal control (n={step})"] = overall_wellbeing_change_opt_ctrl.get(step, [])
+    data[f"brute force (n={step})"] = overall_wellbeing_change_brute_force.get(step, [])
+    data[f"max ac (n={step})"] = overall_wellbeing_change_max_ac.get(step, [])
+
+df_results = pd.DataFrame(data)
+filepath1 = os.path.join("results_control_strategies", "results_rnn_steps_mean.csv")
 df_results.to_csv(filepath1, index=False)
+print(f"Results saved to {filepath1}")
+
+# Questions to this approach:
+# Should you use the latest model (greatest now) for the predictions?
+# Should you include interventions in nan-rows?
+
+# Should you compute the difference of the means of the next n_steps or only for the steps that arent nan in the real data (second is better because you dont make assumption that they would answer mean)
+# Should every file contribute equally to the mean wellbeing difference per strategy?
+#  -> should the mean be taken over the wellbeing difference per intervention rather than participant?
+
+# Maybe test if the model has the tendency to predict lower values (how?)
