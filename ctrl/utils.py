@@ -15,6 +15,8 @@ from scipy.io import loadmat
 import pandas as pd
 ### Data utils
 
+# Added functions by Anton Henkel: csv_to_dataset, load_dataset to load and preprocess dataset, and dataset_to_csv to see resulting csv
+
 def load_data(ema_range=3, language='english'):
     if ema_range==6:
         data_dir = 'D:/ZI Mannheim/Control Theory/data_EMIcompass/range_0_to_6'
@@ -119,7 +121,7 @@ def stable_ridge_regression(data, inputs, intercept=False, accepted_eigval_thres
     if intercept:
         combined_predictor = np.hstack((combined_predictor, np.ones((combined_predictor.shape[0], 1))))
         
-    # Remove rows in predictor with NaN values in predictor or target and the corresponding target rows (next time step)
+    #  Remove rows in predictor with NaN values in predictor or target and the corresponding target rows (next time step)
     nan_mask = ~np.isnan(combined_predictor).any(axis=1) & ~np.isnan(target).any(axis=1)
     combined_predictor = combined_predictor[nan_mask]
     target = target[nan_mask]
@@ -301,7 +303,9 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
 
-def csv_to_dataset(file_path, state_columns, input_columns, centered=True, remove_initial_nan=True, exclude_constant_columns=False, invert_columns=[]):
+# Author: Anton Henkel
+
+def csv_to_dataset(file_path, state_columns, input_columns, centered=True, remove_initial_nan=True):
     " Load a CSV file, adjust data and convert it to a datset (dictionary). "
     csv_df = pd.read_csv(file_path)
     required_columns = state_columns + input_columns
@@ -319,37 +323,16 @@ def csv_to_dataset(file_path, state_columns, input_columns, centered=True, remov
     # Center state variables to [-3, 3]
     if centered:
         X -= 4
-
-    # Exclude constant columns in state_columns if specified
-    if exclude_constant_columns:
-        # Identify constant columns in state_columns
-        constant_columns = [col for col in state_columns if csv_df[col].nunique(dropna=True) == 1]
-        
-        if constant_columns:
-            # Drop constant columns from the DataFrame
-            csv_df = csv_df.drop(columns=constant_columns)
-            state_columns = [col for col in state_columns if col not in constant_columns]
-            if state_columns:
-                X = csv_df[state_columns].values
-            else:
-                return {'X': [], 'Inp': Inp}
-    
-    # Invert columns if necessary
-    for column in invert_columns:
-        idx = state_columns.index(column)
-        X[:, idx] = -X[:, idx]
-    
-    # Return the dataset as a dictionary
     return {'X': X, 'Inp': Inp}
 
-def load_dataset(data_folder, subfolders, state_columns, input_columns, centered=True, remove_initial_nan=True, exclude_constant_columns=False, invert_columns=[]):
+def load_dataset(data_folder, subfolders, state_columns, input_columns, centered=True, remove_initial_nan=True):
     "Load all CSV files from the given subfolders and return dataset list and filenames."
     dataset_list = []
     files = []
     for subfolder in subfolders:
         folder_path = os.path.join(data_folder, subfolder, "*.csv")
         for file in glob.glob(folder_path):
-            data = csv_to_dataset(file, state_columns, input_columns, centered=centered, remove_initial_nan=remove_initial_nan, exclude_constant_columns=exclude_constant_columns, invert_columns=invert_columns)
+            data = csv_to_dataset(file, state_columns, input_columns, centered, remove_initial_nan)
             dataset_list.append(data)
             files.append(file)
     return dataset_list, files
@@ -365,5 +348,4 @@ def dataset_to_csv(dataset, state_columns, input_columns, output_file):
 
     columns = state_columns + input_columns
     df = pd.DataFrame(data, columns=columns)
-    
     df.to_csv(output_file, index=False)
