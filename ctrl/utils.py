@@ -12,10 +12,7 @@ from mpl_toolkits.axes_grid1 import Divider, Size, make_axes_locatable
 from scipy import stats
 from scipy.io import loadmat
 
-import pandas as pd
 ### Data utils
-
-# Added functions by Anton Henkel: csv_to_dataset, load_dataset to load and preprocess dataset, and dataset_to_csv to see resulting csv
 
 def load_data(ema_range=3, language='english'):
     if ema_range==6:
@@ -302,50 +299,3 @@ def fixed_size_plot(width_inches: float, height_inches: float, pad_inches: float
     ax = fig.add_axes(divider.get_position(),
                     axes_locator=divider.new_locator(nx=1, ny=1))
     return fig, ax
-
-# Author: Anton Henkel
-
-def csv_to_dataset(file_path, state_columns, input_columns, centered=True, remove_initial_nan=True):
-    " Load a CSV file, adjust data and convert it to a datset (dictionary). "
-    csv_df = pd.read_csv(file_path)
-    required_columns = state_columns + input_columns
-    csv_df = csv_df[required_columns]
-    
-    if remove_initial_nan:
-        # Delete empty rows in the beginning
-        first_non_na_index = csv_df.notna().all(axis=1).idxmax()
-        csv_df = csv_df.iloc[first_non_na_index:].reset_index(drop=True)
-    
-    # Split into state and input variables (ndarrays)
-    X = csv_df[state_columns].values
-    Inp = csv_df[input_columns].values
-
-    # Center state variables to [-3, 3]
-    if centered:
-        X -= 4
-    return {'X': X, 'Inp': Inp}
-
-def load_dataset(data_folder, subfolders, state_columns, input_columns, centered=True, remove_initial_nan=True):
-    "Load all CSV files from the given subfolders and return dataset list and filenames."
-    dataset_list = []
-    files = []
-    for subfolder in subfolders:
-        folder_path = os.path.join(data_folder, subfolder, "*.csv")
-        for file in glob.glob(folder_path):
-            data = csv_to_dataset(file, state_columns, input_columns, centered, remove_initial_nan)
-            dataset_list.append(data)
-            files.append(file)
-    return dataset_list, files
-
-def dataset_to_csv(dataset, state_columns, input_columns, output_file):
-    " Convert a dataset (dictionary) back to a CSV file. "
-    # Extract the state and input matrices from the dataset
-    X = dataset['X']
-    Inp = dataset['Inp']
-    
-    # Concatenate the state and input arrays horizontally
-    data = np.hstack((X, Inp))
-
-    columns = state_columns + input_columns
-    df = pd.DataFrame(data, columns=columns)
-    df.to_csv(output_file, index=False)
