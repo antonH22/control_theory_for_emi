@@ -192,13 +192,11 @@ def prediction_error_rnn(model_path, now, step_by_step, n_steps, X, U):
 
     # Compute the average MAE per step across models, ignoring NaN values
     mae_per_step_list = [np.nanmean(steps) if len(steps) > 0 else float('nan') for steps in mae_accumulator]
-
     return mae_per_step_list
 
 def prediction_error_lds(now, step_by_step, n_steps, X, U):
     " Computes step-wise or multi-step MAE for n_steps LDS predictions from timepoint now. "
     mae_per_step_list = []
-
     # Split data
     X_train = X[:now]
     U_train = U[:now]
@@ -227,8 +225,9 @@ def prediction_error_lds(now, step_by_step, n_steps, X, U):
     for i in range(len(X_test)):
         mae_per_step = np.mean(np.abs(predictions_np[i] - X_test[i]))
         mae_per_step_list.append(mae_per_step)
-
     return mae_per_step_list
+
+### RNN model file path extraction utils
 
 def get_model_paths(participant_nr, folder_path):
     " Maps timesteps to model paths for a participant using filename pattern matching. "
@@ -270,6 +269,31 @@ def extract_participant_ids(folder_path):
         if match:
             participant_ids.add(int(match.group(1)))
     return sorted(participant_ids)
+
+def extract_participant_nr_and_model_path(file, rnn_model_path_MRT1, rnn_model_path_MRT2, rnn_model_path_MRT3):
+    " Extracts participant number and corresponding model path from filename"
+    match = re.search(r"MRT(\d)", file)
+    mrt_nr = int(match.group(1))
+    model_paths = {1: rnn_model_path_MRT1, 2: rnn_model_path_MRT2, 3: rnn_model_path_MRT3}
+    model_path = model_paths.get(mrt_nr)
+    # Get participant number
+    match = re.search(r'_(\d+)\.csv$', file)
+    participant_nr = int(match.group(1))
+    return participant_nr, model_path
+
+def get_latest_model_path(participant_nr, model_path, index):
+    " Returns the path of the latest available RNN model for a participant up to index. "
+    model_paths_dict = get_model_paths(participant_nr, model_path)
+    if not model_paths_dict:
+        return False
+    # Select latest model up to index
+    valid_keys = [k for k in model_paths_dict.keys() if k <= index]
+    if not valid_keys:
+        # Then there is no trained model
+        return False
+    key_online = max(valid_keys)
+    model_path_scenario = model_paths_dict[key_online]
+    return model_path_scenario
 
 ### Utils for inverted pendulum
 
