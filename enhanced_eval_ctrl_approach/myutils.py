@@ -129,7 +129,7 @@ def compute_dominant_eigenvalue(X_train, U_train):
 
 ### Utils for comparing rnn with lds
 
-from bptt.plrnn import PLRNN
+from rnn_module.bptt.plrnn import PLRNN
 
 def prediction_error_rnn(model_path, now, step_by_step, n_steps, X, U):
     " Computes step-wise or multi-step MAE for n_steps RNN predictions from timepoint now, averaged across 10 model initializations. "
