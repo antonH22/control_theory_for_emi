@@ -6,17 +6,19 @@ import os
 ### Plot for evaluating control strategies with bias correction (5.1.6, Figure 7) and without bias correction (A.2, Figure 10)
 
 # Load CSV
-filepath = os.path.join("results_replicated", "results_control_strategies_offline.csv")
+filepath = os.path.join("results_replicated", "results_control_strategies_offline_bias_corrected.csv")
 df = pd.read_csv(filepath)
 
 n_steps = [1,2,3,4,5,6,7,8,9,10,11,12]
-strategies = ["optimal control", "brute force", "max ac", "real emi"]
+strategies = ["optimal control", "brute force", "max ac"] # Optional "real emi", "no emi", "bias" (adjust bar_width)
 
 colors = {
     "optimal control": "green",
     "brute force": "orange",
     "max ac": "purple",
-    "real emi" : "grey"
+    "real emi" : "grey",
+    "no emi" : "black",
+    "bias": "red"
 }
 
 # Compute means and standard deviations

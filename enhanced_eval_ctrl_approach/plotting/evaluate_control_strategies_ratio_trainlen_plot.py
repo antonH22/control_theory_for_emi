@@ -29,16 +29,13 @@ def summarize_local_averages(x, y, x_targets, radius=0.05):
 step = 1
 folder = "results_replicated"
 
-filename = "results_control_strategies_online_ratio_trainlen.csv"
-#filename = "results_control_strategies_onlineratio_trainlen.csv"
+filename = "results_control_strategies_online_bias_corrected_ratio_trainlen.csv"
 filepath = os.path.join(folder, filename)
 df = pd.read_csv(filepath)
 # Extract values
 ratios = df["valid ratio"]
 trainlens = df["trainset length"]
 brute_force_wellbeing_difference = df["optimal control"]
-
-print(df)
 
 color = "green"
 xlabel_ratio='Valid ratio'
@@ -59,7 +56,6 @@ save_path = None
 myplots.myplot_scatter(ratios, brute_force_wellbeing_difference, rm_only=rm_only, color_sc=color, color_rm="darkorange", window_size=window_size, markersize=markersize, alpha=alpha, legend_label=legend_label, xlabel=xlabel_ratio, ylabel=ylabel, title=title, save_path=save_path)
 
 myplots.myplot_scatter(trainlens, brute_force_wellbeing_difference, rm_only=rm_only, color_sc=color, color_rm="darkorange", window_size=window_size, markersize=markersize, alpha=alpha, xlabel=xlabel_trainlen, ylabel=ylabel, title=title, save_path=save_path)
-
 
 window_ratio = 0.1
 x_targets = np.arange(0.2, 1.01, window_ratio)

@@ -23,11 +23,11 @@ data_folder = "data"
 subfolders = ["MRT1/processed_csv_no_con", "MRT2/processed_csv_no_con", "MRT3/processed_csv_no_con"]
 
 save_folder = "results_replicated"
-filename_results = "results_control_strategies_offline.csv"
+filename_results = "results_control_strategies_offline_bias_corrected.csv"
 filename_results_data_quality = "_ratio_trainlen.csv"
 
-online = False
-bias_correction = False # Bias correction significantly increases runtime
+online = False # Online evaluation increases runtime
+bias_correction = True # Bias correction significantly increases runtime
 step_x = 1 # Forecasting step for which valid ratios and training set length are extracted (analyzed for )
 
 n_steps = [1,2,3,4,5,6,7,8,9,10,11,12]
