@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import torch as tc
 
-from bptt.plrnn import PLRNN
+from rnn_module.bptt.plrnn import PLRNN
 
 ### Evaluating control strategies with the RNN model with bias correction (5.1.6, Figure 7) and without bias correction (A.2, Figure 10)
 ### Evaluating optimal control strategy across empirical valid ratios and training set lengths (A.3, Figure 11, 12)
