@@ -35,9 +35,9 @@ def prediction_errors_per_participant(participant_nr, folder_path_model, data_di
 
     return mae_mean_per_step_array_rnn, mae_mean_per_step_array_lds
 
-folder_path_MRT1 = "D:/v2_MRT1_every_valid_day"
-folder_path_MRT2 = "D:/v2_MRT2_every_valid_day"
-folder_path_MRT3 = "D:/v2_MRT3_every_valid_day"
+rnn_model_path_MRT1 = "D:/v2_MRT1_every_valid_day"
+rnn_model_path_MRT2 = "D:/v2_MRT2_every_valid_day"
+rnn_model_path_MRT3 = "D:/v2_MRT3_every_valid_day"
 
 data_folder_MRT1 = "data/MRT1/processed_csv_no_con"
 data_folder_MRT2 = "data/MRT2/processed_csv_no_con"
@@ -58,17 +58,17 @@ def process_participants_per_mrt(participants, folder_path, data_folder):
         print(f'Iteration {num_iterations}/143')
 
 # Initialization
-participants_MRT1 = myutils.extract_participant_ids(folder_path_MRT1)
-participants_MRT2 = myutils.extract_participant_ids(folder_path_MRT2)
-participants_MRT3 = myutils.extract_participant_ids(folder_path_MRT3)
+participants_MRT1 = myutils.extract_participant_ids(rnn_model_path_MRT1)
+participants_MRT2 = myutils.extract_participant_ids(rnn_model_path_MRT2)
+participants_MRT3 = myutils.extract_participant_ids(rnn_model_path_MRT3)
 
 num_iterations = 0
 mae_n_overall_list_rnn = []
 mae_n_overall_list_lds = []
 
-process_participants_per_mrt(participants_MRT1, folder_path_MRT1, data_folder_MRT1)
-process_participants_per_mrt(participants_MRT2, folder_path_MRT2, data_folder_MRT2)
-process_participants_per_mrt(participants_MRT3, folder_path_MRT3, data_folder_MRT3)
+process_participants_per_mrt(participants_MRT1, rnn_model_path_MRT1, data_folder_MRT1)
+process_participants_per_mrt(participants_MRT2, rnn_model_path_MRT2, data_folder_MRT2)
+process_participants_per_mrt(participants_MRT3, rnn_model_path_MRT3, data_folder_MRT3)
 
 # Save the rnn results to a csv file
 mae_n_overall_array_rnn = np.array(mae_n_overall_list_rnn)

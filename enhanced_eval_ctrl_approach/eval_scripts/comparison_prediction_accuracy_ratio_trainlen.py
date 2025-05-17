@@ -11,17 +11,17 @@ warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 ### Comparison of RNN and LDS prediction accuracy across empirical valid ratios and training set lengths (5.1.5, Figure 6)
 
-folder_path_MRT1 = "D:/v2_MRT1_every_valid_day"
-folder_path_MRT2 = "D:/v2_MRT2_every_valid_day"
-folder_path_MRT3 = "D:/v2_MRT3_every_valid_day"
+rnn_model_path_MRT1 = "D:/v2_MRT1_every_valid_day"
+rnn_model_path_MRT2 = "D:/v2_MRT2_every_valid_day"
+rnn_model_path_MRT3 = "D:/v2_MRT3_every_valid_day"
 
 data_folder_MRT1 = "data/MRT1/processed_csv_no_con"
 data_folder_MRT2 = "data/MRT2/processed_csv_no_con"
 data_folder_MRT3 = "data/MRT3/processed_csv_no_con"
 
-participants_MRT1 = myutils.extract_participant_ids(folder_path_MRT1)
-participants_MRT2 = myutils.extract_participant_ids(folder_path_MRT2)
-participants_MRT3 = myutils.extract_participant_ids(folder_path_MRT3)
+participants_MRT1 = myutils.extract_participant_ids(rnn_model_path_MRT1)
+participants_MRT2 = myutils.extract_participant_ids(rnn_model_path_MRT2)
+participants_MRT3 = myutils.extract_participant_ids(rnn_model_path_MRT3)
 
 step_by_step = True # True: Model predicts each next step using the observed EMA values at the current time step
 n_steps = 12
@@ -54,9 +54,9 @@ def process_participants_per_mrt(participants, folder_path, data_folder):
         num_iterations += 1
         print(f'Iteration {num_iterations}/143')
 
-process_participants_per_mrt(participants_MRT1, folder_path_MRT1, data_folder_MRT1)
-process_participants_per_mrt(participants_MRT2, folder_path_MRT2, data_folder_MRT2)
-process_participants_per_mrt(participants_MRT3, folder_path_MRT3, data_folder_MRT3)
+process_participants_per_mrt(participants_MRT1, rnn_model_path_MRT1, data_folder_MRT1)
+process_participants_per_mrt(participants_MRT2, rnn_model_path_MRT2, data_folder_MRT2)
+process_participants_per_mrt(participants_MRT3, rnn_model_path_MRT3, data_folder_MRT3)
 
 # Convert results to DataFrame to save it to a csv file
 df_rnn = pd.DataFrame({
